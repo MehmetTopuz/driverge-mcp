@@ -1,0 +1,48 @@
+{
+  "name": "driverge-mcp",
+  "version": "0.0.0",
+  "description": "MCP server that turns IC datasheet PDFs into embedded C/C++ drivers, driven by any MCP client.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "embedded",
+    "datasheet",
+    "driver",
+    "codegen",
+    "stm32",
+    "esp32"
+  ],
+  "license": "MIT",
+  "author": "Mehmet Topuz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MehmetTopuz/driverge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MehmetTopuz/driverge/issues"
+  },
+  "homepage": "https://github.com/MehmetTopuz/driverge#readme",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "driverge": "dist/server.js"
+  },
+  "main": "dist/server.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
