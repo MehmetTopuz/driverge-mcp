@@ -15,4 +15,4 @@ Entries are grouped by the commit area vocabulary from
 
 ### Fixed
 
-[Unreleased]: https://github.com/MehmetTopuz/driverge/commits/main
+[Unreleased]: https://github.com/MehmetTopuz/driverge-mcp/commits/main

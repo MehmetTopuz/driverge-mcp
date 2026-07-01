@@ -16,12 +16,12 @@
   "author": "Mehmet Topuz",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MehmetTopuz/driverge.git"
+    "url": "git+https://github.com/MehmetTopuz/driverge-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/MehmetTopuz/driverge/issues"
+    "url": "https://github.com/MehmetTopuz/driverge-mcp/issues"
   },
-  "homepage": "https://github.com/MehmetTopuz/driverge#readme",
+  "homepage": "https://github.com/MehmetTopuz/driverge-mcp#readme",
   "type": "module",
   "engines": {
     "node": ">=18"
