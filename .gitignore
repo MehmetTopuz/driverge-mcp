@@ -22,3 +22,6 @@ Thumbs.db
 
 # Datasheet PDFs are copyrighted — keep them local (e.g. tests/fixtures/), never commit
 *.pdf
+
+# Codegen out_dir (generate_driver writes here on demand) — never tracked
+generated/
