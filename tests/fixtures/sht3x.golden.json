@@ -1,0 +1,74 @@
+{
+  "metadata": {
+    "part": "SHT3x",
+    "manufacturer": "Sensirion",
+    "manufacturerConfidence": 1,
+    "pdfType": "text_based",
+    "pageCount": 22
+  },
+  "protocol": {
+    "bus": "I2C",
+    "addresses": [
+      "0x44"
+    ]
+  },
+  "interface": {
+    "kind": "command_set",
+    "commands": [
+      {
+        "name": "general_call_reset",
+        "code": "0x0006"
+      },
+      {
+        "name": "periodic_measurement_with_art",
+        "code": "0x2B32",
+        "crc": {
+          "poly": "0x31",
+          "init": "0xFF",
+          "width": 8
+        },
+        "responseWords": 2
+      },
+      {
+        "name": "high_repeatability_measurement_with_clock_stretching",
+        "code": "0x2C06",
+        "crc": {
+          "poly": "0x31",
+          "init": "0xFF",
+          "width": 8
+        },
+        "responseWords": 2
+      },
+      {
+        "name": "break",
+        "code": "0x3093"
+      },
+      {
+        "name": "soft_reset",
+        "code": "0x30A2"
+      },
+      {
+        "name": "read_out_of_status_register",
+        "code": "0xF32D",
+        "crc": {
+          "poly": "0x31",
+          "init": "0xFF",
+          "width": 8
+        }
+      }
+    ]
+  },
+  "validation": {
+    "valid": true,
+    "errors": [],
+    "warnings": [
+      "general_call_reset: response length not declared",
+      "general_call_reset: CRC parameters missing",
+      "break: response length not declared",
+      "break: CRC parameters missing",
+      "soft_reset: response length not declared",
+      "soft_reset: CRC parameters missing",
+      "read_out_of_status_register: response length not declared"
+    ]
+  }
+}
