@@ -42,6 +42,32 @@ export interface PdfClassification {
 /** Label -> 1-based page numbers where that section was detected. */
 export type PageMap = Record<string, number[]>;
 
+/** One bit field within a register, positioned by absolute bit index. */
+export interface BitField {
+  name: string;
+  /** Most-significant bit index within the register (0-7). */
+  msb: number;
+  /** Least-significant bit index within the register (0-7). */
+  lsb: number;
+}
+
+/** A single register row reconstructed from a memory-map table. */
+export interface Register {
+  name: string;
+  /** Verbatim address cell, e.g. "0xF4" or a range like "0x88…0xA1". */
+  address: string;
+  /** Verbatim reset/default cell, e.g. "0x00", "0x60", "individual". */
+  reset: string;
+  bitFields: BitField[];
+}
+
+/** The register map extracted from one table. */
+export interface RegisterTable {
+  /** 1-based page the table was found on. */
+  page: number;
+  registers: Register[];
+}
+
 /** Result of L1 + L2 over a whole PDF. */
 export interface PdfAnalysis {
   type: PdfType;
