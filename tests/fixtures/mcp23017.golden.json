@@ -1,0 +1,570 @@
+{
+  "part": "MCP23017",
+  "sourcePage": 16,
+  "registers": [
+    {
+      "name": "IODIRA",
+      "address": "0x00",
+      "reset": "0xFF",
+      "bitFields": [
+        {
+          "name": "IO7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "IO6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "IO5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "IO4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "IO3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "IO2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "IO1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "IO0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "IPOLA",
+      "address": "0x01",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "IP7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "IP6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "IP5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "IP4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "IP3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "IP2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "IP1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "IP0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "GPINTENA",
+      "address": "0x02",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "GPINT7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "GPINT6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "GPINT5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "GPINT4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "GPINT3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "GPINT2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "GPINT1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "GPINT0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "GPPUA",
+      "address": "0x06",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "PU7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "PU6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "PU5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "PU4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "PU3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "PU2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "PU1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "PU0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "GPIOA",
+      "address": "0x09",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "GP7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "GP6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "GP5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "GP4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "GP3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "GP2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "GP1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "GP0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "OLATA",
+      "address": "0x0A",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "OL7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "OL6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "OL5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "OL4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "OL3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "OL2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "OL1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "OL0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "IODIRB",
+      "address": "0x10",
+      "reset": "0xFF",
+      "bitFields": [
+        {
+          "name": "IO7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "IO6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "IO5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "IO4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "IO3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "IO2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "IO1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "IO0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "IPOLB",
+      "address": "0x11",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "IP7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "IP6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "IP5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "IP4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "IP3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "IP2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "IP1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "IP0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "GPINTENB",
+      "address": "0x12",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "GPINT7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "GPINT6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "GPINT5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "GPINT4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "GPINT3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "GPINT2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "GPINT1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "GPINT0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "GPPUB",
+      "address": "0x16",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "PU7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "PU6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "PU5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "PU4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "PU3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "PU2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "PU1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "PU0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "GPIOB",
+      "address": "0x19",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "GP7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "GP6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "GP5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "GP4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "GP3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "GP2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "GP1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "GP0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "OLATB",
+      "address": "0x1A",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "OL7",
+          "msb": 7,
+          "lsb": 7
+        },
+        {
+          "name": "OL6",
+          "msb": 6,
+          "lsb": 6
+        },
+        {
+          "name": "OL5",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "OL4",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "OL3",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "OL2",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "OL1",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "OL0",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    }
+  ]
+}
