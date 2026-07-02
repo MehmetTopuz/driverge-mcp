@@ -1,19 +1,21 @@
 // Public surface of the codegen layer.
 
 import type { DatasheetJson } from "../schema/types.js";
+import { generateEsp32Driver } from "./esp32.js";
 import { generatePortableDriver } from "./portable.js";
 import type { CodegenTarget, DriverArtifact } from "./types.js";
 
 export * from "./types.js";
 export { generatePortableDriver } from "./portable.js";
+export { generateEsp32Driver } from "./esp32.js";
 export { lintDriver } from "./lint.js";
 export { slug, prefixOf } from "./ident.js";
 
-/** Native targets land in Sessions 7-8; only "portable" is renderable in v0.1.0. */
+/** stm32/arduino land in later sessions; portable + esp32 render today. */
 export class UnsupportedTargetError extends Error {
   constructor(public readonly target: string) {
     super(
-      `codegen target "${target}" is not available yet — only "portable" (thin-HAL) is supported in this release`,
+      `codegen target "${target}" is not available yet — supported targets: portable, esp32`,
     );
     this.name = "UnsupportedTargetError";
   }
@@ -25,5 +27,6 @@ export function generateDriver(
   target: CodegenTarget,
 ): DriverArtifact {
   if (target === "portable") return generatePortableDriver(json);
+  if (target === "esp32") return generateEsp32Driver(json);
   throw new UnsupportedTargetError(target);
 }

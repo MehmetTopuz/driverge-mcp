@@ -24,6 +24,8 @@ export interface FillInBrief {
   doc_todo: string;
   /** Present only for command-set devices with a CRC. */
   crc_todo?: string;
+  /** Present for native targets whose HAL seam needs board bring-up. */
+  hal_setup_todo?: string;
 }
 
 export interface DriverArtifact {

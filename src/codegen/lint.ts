@@ -43,7 +43,14 @@ export function lintDriver(
   const prefix = prefixOf(json.metadata.part);
   const all = files.map((f) => `/* ${f.path} */\n${f.content}`).join("\n\n");
   // Comments carry the TODO markers and prose; strip them before code-shape checks.
-  const code = all.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+  const code = strip(all);
+  // Thin-HAL purity applies to the driver CORE, not the seam implementation:
+  // a native target's <part>_hal_<target>.c is *where* platform calls belong.
+  const isHalImpl = (p: string) => /_hal_[a-z0-9]+\.(?:c|cpp)$/i.test(p);
+  const coreCode = strip(
+    files.filter((f) => !isHalImpl(f.path)).map((f) => f.content).join("\n"),
+  );
 
   // 1. No leftover TODO(driverge) — the host AI must complete every marker.
   const todos = all.match(/TODO\(driverge\)/g);
@@ -55,11 +62,11 @@ export function lintDriver(
   if (!balanced(code, "{", "}")) errors.push("unbalanced braces { }");
   if (!balanced(code, "(", ")")) errors.push("unbalanced parentheses ( )");
 
-  // 3. Thin-HAL purity — no vendor peripheral APIs; only the hal_* seam.
+  // 3. Thin-HAL purity — no vendor peripheral APIs in the core; only the hal_* seam.
   for (const { re, api } of FORBIDDEN) {
-    if (re.test(code)) errors.push(`direct ${api} call — bus access must go through the hal_* seam`);
+    if (re.test(coreCode)) errors.push(`direct ${api} call — bus access must go through the hal_* seam`);
   }
-  for (const m of code.matchAll(/\bhal_[a-z0-9_]+/g)) {
+  for (const m of coreCode.matchAll(/\bhal_[a-z0-9_]+/g)) {
     if (!HAL_ALLOWED.test(m[0])) {
       errors.push(`unknown HAL function "${m[0]}" — thin HAL is hal_i2c_*/hal_spi_*/hal_delay_ms only`);
     }
