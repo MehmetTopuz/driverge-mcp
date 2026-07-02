@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 // Driverge MCP server — entry point.
 //
-// Exposes a stdio MCP server built with @modelcontextprotocol/sdk. Session 1
-// ships a single dummy `ping` tool so the server can be booted and reached from
-// any MCP client (`npx driverge-mcp`). The datasheet-analysis, driver-generation
-// and validation tools land in later sessions.
+// Exposes a stdio MCP server built with @modelcontextprotocol/sdk. Alongside a
+// `ping` health check it registers the full Driverge surface (Session 6):
+// analyze_datasheet / generate_driver / validate_driver / validate_datasheet
+// tools, the datasheet + schema resources, and the generate-driver prompt.
+// See wiki: mcp-tool-usage-flow.
 
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { registerDriverge } from "./mcp/register.js";
 
 const SERVER_NAME = "driverge-mcp";
 const SERVER_VERSION = "0.0.0";
@@ -35,6 +37,8 @@ export function createServer(): McpServer {
       ],
     }),
   );
+
+  registerDriverge(server);
 
   return server;
 }

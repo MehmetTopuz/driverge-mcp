@@ -31,7 +31,8 @@
   },
   "main": "dist/server.js",
   "files": [
-    "dist"
+    "dist",
+    "schemas"
   ],
   "scripts": {
     "build": "tsc",
