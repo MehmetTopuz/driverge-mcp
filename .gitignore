@@ -19,3 +19,6 @@ npm-debug.log*
 # OS / editor cruft
 .DS_Store
 Thumbs.db
+
+# Datasheet PDFs are copyrighted — keep them local (e.g. tests/fixtures/), never commit
+*.pdf
