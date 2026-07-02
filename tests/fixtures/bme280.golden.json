@@ -1,0 +1,211 @@
+{
+  "part": "BME280",
+  "sourcePage": 27,
+  "registers": [
+    {
+      "name": "hum_lsb",
+      "address": "0xFE",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "hum_lsb",
+          "msb": 7,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "hum_msb",
+      "address": "0xFD",
+      "reset": "0x80",
+      "bitFields": [
+        {
+          "name": "hum_msb",
+          "msb": 7,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "temp_xlsb",
+      "address": "0xFC",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "temp_xlsb",
+          "msb": 7,
+          "lsb": 4
+        }
+      ]
+    },
+    {
+      "name": "temp_lsb",
+      "address": "0xFB",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "temp_lsb",
+          "msb": 7,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "temp_msb",
+      "address": "0xFA",
+      "reset": "0x80",
+      "bitFields": [
+        {
+          "name": "temp_msb",
+          "msb": 7,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "press_xlsb",
+      "address": "0xF9",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "press_xlsb",
+          "msb": 7,
+          "lsb": 4
+        }
+      ]
+    },
+    {
+      "name": "press_lsb",
+      "address": "0xF8",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "press_lsb",
+          "msb": 7,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "press_msb",
+      "address": "0xF7",
+      "reset": "0x80",
+      "bitFields": [
+        {
+          "name": "press_msb",
+          "msb": 7,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "config",
+      "address": "0xF5",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "t_sb",
+          "msb": 7,
+          "lsb": 5
+        },
+        {
+          "name": "filter",
+          "msb": 4,
+          "lsb": 2
+        },
+        {
+          "name": "spi3w_en",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "ctrl_meas",
+      "address": "0xF4",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "osrs_t",
+          "msb": 7,
+          "lsb": 5
+        },
+        {
+          "name": "osrs_p",
+          "msb": 4,
+          "lsb": 2
+        },
+        {
+          "name": "mode",
+          "msb": 1,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "address": "0xF3",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "measuring",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "im_update",
+          "msb": 0,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "ctrl_hum",
+      "address": "0xF2",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "osrs_h",
+          "msb": 2,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "calib26..calib41",
+      "address": "0xE1…0xF0",
+      "reset": "individual",
+      "bitFields": []
+    },
+    {
+      "name": "reset",
+      "address": "0xE0",
+      "reset": "0x00",
+      "bitFields": [
+        {
+          "name": "reset",
+          "msb": 7,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "id",
+      "address": "0xD0",
+      "reset": "0x60",
+      "bitFields": [
+        {
+          "name": "chip_id",
+          "msb": 7,
+          "lsb": 0
+        }
+      ]
+    },
+    {
+      "name": "calib00..calib25",
+      "address": "0x88…0xA1",
+      "reset": "individual",
+      "bitFields": []
+    }
+  ]
+}
