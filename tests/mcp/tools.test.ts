@@ -1,0 +1,153 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { createServer } from "../../src/server";
+import { generatePortableDriver } from "../../src/codegen/portable";
+import { clearDatasheetCache, putDatasheet } from "../../src/mcp/cache";
+import type { DatasheetJson } from "../../src/schema/types";
+import { registerDatasheet } from "../codegen/helpers";
+
+type TextContent = { type: string; text?: string };
+type ToolResult = { content: TextContent[]; isError?: boolean };
+
+const REF = "ds_test_bme280";
+const REF_BAD = "ds_test_invalid";
+const validJson = registerDatasheet("bme280.golden.json", "BME280");
+const invalidJson: DatasheetJson = {
+  ...validJson,
+  validation: { valid: false, errors: ["register_map has no registers"], warnings: [] },
+};
+
+function firstText(result: unknown): string {
+  return ((result as ToolResult).content[0] as TextContent).text ?? "";
+}
+
+let open: { client: Client; server: McpServer } | undefined;
+
+async function connectClient(): Promise<Client> {
+  const server = createServer();
+  const client = new Client({ name: "driverge-test-client", version: "0.0.0" });
+  const [ct, st] = InMemoryTransport.createLinkedPair();
+  await Promise.all([server.connect(st), client.connect(ct)]);
+  open = { client, server };
+  return client;
+}
+
+beforeEach(() => {
+  clearDatasheetCache();
+  putDatasheet({ ref: REF, pdfPath: "/x/bme280.pdf", json: validJson });
+  putDatasheet({ ref: REF_BAD, pdfPath: "/x/bad.pdf", json: invalidJson });
+});
+
+afterEach(async () => {
+  if (open) {
+    await open.client.close();
+    await open.server.close();
+    open = undefined;
+  }
+});
+
+describe("Driverge MCP surface", () => {
+  it("registers the analysis/codegen/validation tools", async () => {
+    const client = await connectClient();
+    const names = (await client.listTools()).tools.map((t) => t.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "ping",
+        "analyze_datasheet",
+        "generate_driver",
+        "validate_driver",
+        "validate_datasheet",
+      ]),
+    );
+  });
+
+  it("generate_driver renders the portable skeleton for a valid ref", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: REF, target: "portable" },
+    });
+    expect((result as ToolResult).isError).toBeFalsy();
+    const artifact = JSON.parse(firstText(result));
+    expect(artifact.files.map((f: { path: string }) => f.path)).toEqual([
+      "bme280.h",
+      "bme280.c",
+    ]);
+    expect(artifact.fill_in_brief).toHaveProperty("init_sequence_todo");
+  });
+
+  it("generate_driver rejects an unknown ref", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: "nope", target: "portable" },
+    });
+    expect((result as ToolResult).isError).toBe(true);
+    expect(firstText(result)).toMatch(/unknown ref/);
+  });
+
+  it("generate_driver refuses codegen when validation failed", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: REF_BAD, target: "portable" },
+    });
+    expect((result as ToolResult).isError).toBe(true);
+    expect(firstText(result)).toMatch(/validation failed/);
+  });
+
+  it("generate_driver rejects a not-yet-supported native target", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: REF, target: "stm32" },
+    });
+    expect((result as ToolResult).isError).toBe(true);
+    expect(firstText(result)).toMatch(/not available yet/);
+  });
+
+  it("validate_driver passes a completed driver for the ref", async () => {
+    const client = await connectClient();
+    const files = generatePortableDriver(validJson).files.map((f) => ({
+      path: f.path,
+      content: f.content.replace(/TODO\(driverge\)/g, "done"),
+    }));
+    const result = await client.callTool({
+      name: "validate_driver",
+      arguments: { ref: REF, target: "portable", files },
+    });
+    const report = JSON.parse(firstText(result));
+    expect(report.passed).toBe(true);
+    expect(report.errors).toEqual([]);
+  });
+
+  it("validate_datasheet re-checks a cached ref", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "validate_datasheet",
+      arguments: { ref: REF },
+    });
+    expect(JSON.parse(firstText(result)).valid).toBe(true);
+  });
+
+  it("serves the full JSON via the datasheet resource and the schema resource", async () => {
+    const client = await connectClient();
+    const ds = await client.readResource({ uri: `driverge://datasheet/${REF}` });
+    expect(JSON.parse(ds.contents[0].text as string).metadata.part).toBe("BME280");
+
+    const schema = await client.readResource({ uri: "driverge://schema" });
+    expect((schema.contents[0].text as string).length).toBeGreaterThan(2);
+  });
+
+  it("exposes the generate-driver prompt", async () => {
+    const client = await connectClient();
+    const prompt = await client.getPrompt({
+      name: "generate-driver",
+      arguments: { ref: REF, target: "portable" },
+    });
+    expect(prompt.messages[0].content).toMatchObject({ type: "text" });
+    expect((prompt.messages[0].content as { text: string }).text).toMatch(/validate_driver/);
+  });
+});

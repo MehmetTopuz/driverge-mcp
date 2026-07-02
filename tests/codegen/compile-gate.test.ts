@@ -1,0 +1,37 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
+import { generatePortableDriver } from "../../src/codegen/portable";
+import { commandDatasheet, hasGcc, registerDatasheet } from "./helpers";
+
+// L2 compile gate: the generated portable skeleton must be valid C. We compile
+// with `gcc -c` (no link) against the thin-HAL seam — the hal_* symbols stay
+// undefined, which is fine at the compile stage. Skips where gcc is absent
+// (fresh clone / CI without a toolchain).
+const dirs: string[] = [];
+
+function compileOK(files: { path: string; content: string }[], main: string): void {
+  const dir = mkdtempSync(join(tmpdir(), "driverge-cc-"));
+  dirs.push(dir);
+  for (const f of files) writeFileSync(join(dir, f.path), f.content);
+  // Throws (failing the test) on any compile error; stderr surfaces in the message.
+  execFileSync("gcc", ["-std=c11", "-Wall", "-c", join(dir, main), "-o", join(dir, "out.o")]);
+}
+
+afterAll(() => {
+  for (const d of dirs) rmSync(d, { recursive: true, force: true });
+});
+
+describe.skipIf(!hasGcc())("portable driver compiles with gcc -c", () => {
+  it("register_map skeleton (BME280)", () => {
+    const art = generatePortableDriver(registerDatasheet("bme280.golden.json", "BME280"));
+    expect(() => compileOK(art.files, "bme280.c")).not.toThrow();
+  });
+
+  it("command_set skeleton (SHT3x)", () => {
+    const art = generatePortableDriver(commandDatasheet());
+    expect(() => compileOK(art.files, "sht3x.c")).not.toThrow();
+  });
+});
