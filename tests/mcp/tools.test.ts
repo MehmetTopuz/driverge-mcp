@@ -113,11 +113,11 @@ describe("Driverge MCP surface", () => {
     ]);
   });
 
-  it("generate_driver rejects a not-yet-supported native target", async () => {
+  it("generate_driver rejects a not-yet-supported native target (arduino)", async () => {
     const client = await connectClient();
     const result = await client.callTool({
       name: "generate_driver",
-      arguments: { ref: REF, target: "stm32" },
+      arguments: { ref: REF, target: "arduino" },
     });
     expect((result as ToolResult).isError).toBe(true);
     expect(firstText(result)).toMatch(/not available yet/);

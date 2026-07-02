@@ -42,4 +42,10 @@ describe.skipIf(!hasGcc())("portable driver compiles with gcc -c", () => {
     // (that is the user's idf.py build / HIL step, not the in-repo gate).
     expect(() => compileOK(art.files, "bme280.c")).not.toThrow();
   });
+
+  it("stm32 target — the portable CORE still compiles (the CubeHAL seam is not gated)", () => {
+    const art = generateDriver(registerDatasheet("bme280.golden.json", "BME280"), "stm32");
+    // bme280_hal_stm32.c needs the CubeHAL headers (the user's CubeIDE build).
+    expect(() => compileOK(art.files, "bme280.c")).not.toThrow();
+  });
 });
