@@ -98,6 +98,21 @@ describe("Driverge MCP surface", () => {
     expect(firstText(result)).toMatch(/validation failed/);
   });
 
+  it("generate_driver renders the esp32 target (core + ESP-IDF seam)", async () => {
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: REF, target: "esp32" },
+    });
+    expect((result as ToolResult).isError).toBeFalsy();
+    const artifact = JSON.parse(firstText(result));
+    expect(artifact.files.map((f: { path: string }) => f.path)).toEqual([
+      "bme280.h",
+      "bme280.c",
+      "bme280_hal_esp32.c",
+    ]);
+  });
+
   it("generate_driver rejects a not-yet-supported native target", async () => {
     const client = await connectClient();
     const result = await client.callTool({
