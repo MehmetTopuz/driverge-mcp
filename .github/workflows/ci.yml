@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: lint · typecheck · test · build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Datasheet PDFs are git-ignored, so the fixture-gated parser/golden tests
+      # skip on CI; the deterministic codegen/lint/MCP suite runs everywhere. The
+      # gcc compile gate self-skips where no C toolchain is present (Windows).
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
