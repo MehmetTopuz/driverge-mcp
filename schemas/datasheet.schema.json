@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://driverge.dev/schemas/datasheet.schema.json",
+  "title": "Driverge Datasheet",
+  "description": "The parsed, validated datasheet handed (by ref) to the host AI. The `interface` field is a discriminated union on `kind`.",
+  "type": "object",
+  "required": ["metadata", "protocol", "interface", "validation"],
+  "additionalProperties": false,
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["part", "manufacturer", "manufacturerConfidence", "pdfType", "pageCount"],
+      "additionalProperties": false,
+      "properties": {
+        "part": { "type": "string" },
+        "manufacturer": { "type": "string" },
+        "manufacturerConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "pdfType": { "enum": ["text_based", "scanned", "mixed"] },
+        "pageCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "required": ["bus"],
+      "additionalProperties": false,
+      "properties": {
+        "bus": { "enum": ["I2C", "SPI", "UART", "unknown"] },
+        "addresses": { "type": "array", "items": { "type": "string" } },
+        "maxClockHz": { "type": "number", "minimum": 0 }
+      }
+    },
+    "interface": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "registers"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "register_map" },
+            "registers": { "type": "array", "items": { "$ref": "#/definitions/register" } }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "commands"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "command_set" },
+            "commands": { "type": "array", "items": { "$ref": "#/definitions/command" } }
+          }
+        }
+      ]
+    },
+    "validation": {
+      "type": "object",
+      "required": ["valid", "errors", "warnings"],
+      "additionalProperties": false,
+      "properties": {
+        "valid": { "type": "boolean" },
+        "errors": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "definitions": {
+    "register": {
+      "type": "object",
+      "required": ["name", "address", "reset", "bitFields"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "reset": { "type": "string" },
+        "bitFields": { "type": "array", "items": { "$ref": "#/definitions/bitField" } }
+      }
+    },
+    "bitField": {
+      "type": "object",
+      "required": ["name", "msb", "lsb"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "msb": { "type": "integer", "minimum": 0, "maximum": 7 },
+        "lsb": { "type": "integer", "minimum": 0, "maximum": 7 }
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": ["name", "code"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "code": { "type": "string", "pattern": "^0x[0-9A-Fa-f]+$" },
+        "params": { "type": "array", "items": { "type": "string" } },
+        "responseWords": { "type": "integer", "minimum": 0 },
+        "crc": {
+          "type": "object",
+          "required": ["poly", "init", "width"],
+          "additionalProperties": false,
+          "properties": {
+            "poly": { "type": "string" },
+            "init": { "type": "string" },
+            "width": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}
