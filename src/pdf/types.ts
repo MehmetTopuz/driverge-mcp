@@ -68,6 +68,25 @@ export interface RegisterTable {
   registers: Register[];
 }
 
+/** L3a — deterministic manufacturer detection result. */
+export interface ManufacturerDetection {
+  /** Vendor name, or "generic" when no confident match. */
+  manufacturer: string;
+  /** 0-1; 0 means generic fallback. */
+  confidence: number;
+  /** Which signals fired, e.g. ["copyright", "doc-number", "url"]. */
+  signals: string[];
+}
+
+/** L3b — control-interface classification. */
+export type InterfaceKind = "register_map" | "command_set" | "unknown";
+
+export interface InterfaceKindDetection {
+  kind: InterfaceKind;
+  confidence: number;
+  signals: string[];
+}
+
 /** Result of L1 + L2 over a whole PDF. */
 export interface PdfAnalysis {
   type: PdfType;
