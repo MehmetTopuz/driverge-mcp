@@ -8,5 +8,6 @@ export { analyzePdf, analyzePdfFile } from "./analyze.js";
 export { centerX, clusterRows, type TableRow } from "./table.js";
 export { findRegisterTable, parseRegisterTable } from "./register-table.js";
 export { detectManufacturer } from "./manufacturer.js";
+export { detectPart } from "./part.js";
 export { detectInterfaceKind } from "./interface-kind.js";
 export { extractCommands, extractCrc, extractProtocol } from "./command.js";
