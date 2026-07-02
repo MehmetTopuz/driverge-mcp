@@ -1,11 +1,20 @@
 // L4a (register path) — reconstruct a register map table from positioned text.
 //
-// Strategy: find the header row ("Register Name | Address | bit7..bit0 | Reset
-// state"), derive column boundaries and per-bit x-centers from it, then read the
-// rows below into registers. Bit-field positions are recovered geometrically:
-// each field's horizontal center is matched to the bit-column span (of the width
-// implied by its `[hi:lo]` notation) it best aligns with — which correctly
-// handles reserved-bit gaps.
+// Two layouts are handled behind one entry point:
+//
+//   * BME280 (Bosch) style — a single-line header ("Register Name | Address |
+//     bit7..bit0 | Reset state") whose bit fields are written as `name[hi:lo]`
+//     spans. Field positions are recovered geometrically: each field's center is
+//     matched to the bit-column span (of the width implied by `[hi:lo]`) it best
+//     aligns with, which correctly handles reserved-bit gaps.
+//
+//   * MCP23017 (Microchip) style — a header stacked across three physical text
+//     lines ("Register"/"Name", "Address"/"(hex)", "bit 7".."bit 0",
+//     "POR/RST"/"value") that pdfjs emits as separate rows too far apart for the
+//     row clusterer to merge, so we merge the header *band* explicitly. Each
+//     register names every bit individually (IO7..IO0) rather than using spans,
+//     addresses are bare hex ("00") and resets are binary ("1111 1111"); both are
+//     normalized to the "0x.." forms the schema/validator expect.
 
 import { centerX, clusterRows, type TableRow } from "./table.js";
 import type {
@@ -17,8 +26,12 @@ import type {
 } from "./types.js";
 
 const HEX = /0x[0-9A-Fa-f]+/;
+// Bare Microchip address cell: 1-2 hex digits, optional trailing "h" ("00", "1A").
+const BARE_HEX = /^([0-9A-Fa-f]{1,2})h?$/;
 // name[hi:lo] | name[n] | name<hi:lo> | name<n>
 const BITFIELD = /^(.+?)[<[](\d+)(?::(\d+))?[>\]]$/;
+// Max vertical span (px) of a header whose column labels stack over a few lines.
+const HEADER_BAND = 14;
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, "");
 
@@ -31,16 +44,47 @@ interface Columns {
   bitMax: number;
   /** bit index (0-7) => x center of that bit's column. */
   bitCenters: number[];
+  /** true => Microchip layout: bare-hex addr, binary reset, per-bit-named cells. */
+  perBit: boolean;
 }
 
 function isHeader(row: TableRow): boolean {
   const cells = row.items.map((it) => norm(it.str));
   return (
-    cells.includes("registername") &&
+    // "Register Name" (BME280, one cell) or a split "Register" cell (Microchip).
+    (cells.includes("registername") || cells.includes("register")) &&
     cells.includes("address") &&
     cells.includes("bit7") &&
     cells.includes("bit0")
   );
+}
+
+/**
+ * Find the header, merging a stacked multi-line header into one synthetic row.
+ * clusterRows already groups baselines within ~5px; here we additionally fold in
+ * up to two more nearby rows when a single cluster doesn't yet carry all the
+ * header tokens (the Microchip header lines sit ~5-6px apart, just past the row
+ * tolerance). Returns the merged header plus the y of the band's lowest line so
+ * the caller can exclude the folded-in sub-rows from the table body.
+ */
+function findHeaderBand(
+  rows: TableRow[],
+): { header: TableRow; bandBottom: number } | undefined {
+  for (let i = 0; i < rows.length; i++) {
+    let merged: PositionedText[] = [...rows[i].items];
+    let bandBottom = rows[i].y;
+    for (let k = 0; k < 3; k++) {
+      if (isHeader({ y: rows[i].y, items: merged })) {
+        const items = [...merged].sort((a, b) => a.x - b.x);
+        return { header: { y: rows[i].y, items }, bandBottom };
+      }
+      const next = rows[i + k + 1];
+      if (!next || rows[i].y - next.y > HEADER_BAND) break;
+      merged = merged.concat(next.items);
+      bandBottom = next.y;
+    }
+  }
+  return undefined;
 }
 
 function columnsFromHeader(header: TableRow): Columns | undefined {
@@ -48,18 +92,23 @@ function columnsFromHeader(header: TableRow): Columns | undefined {
   let nameCenter: number | undefined;
   let addrCenter: number | undefined;
   const resetCenters: number[] = [];
+  let perBit = false;
 
   for (const it of header.items) {
     const t = norm(it.str);
     const bit = /^bit([0-7])$/.exec(t);
     if (bit) {
       bitCenters[Number(bit[1])] = centerX(it);
-    } else if (t === "registername") {
-      nameCenter = centerX(it);
+    } else if (t === "registername" || t === "register" || t === "name") {
+      // BME280 has one "Register Name" cell; Microchip stacks "Register"/"Name".
+      nameCenter ??= centerX(it);
     } else if (t === "address") {
       addrCenter = centerX(it);
     } else if (t === "reset" || t === "state" || t === "resetstate") {
       resetCenters.push(centerX(it));
+    } else if (t === "por/rst" || t === "value") {
+      resetCenters.push(centerX(it));
+      perBit = true; // Microchip's reset header — signals the per-bit layout.
     }
   }
 
@@ -82,6 +131,7 @@ function columnsFromHeader(header: TableRow): Columns | undefined {
     addrMax: (addrCenter + bitCenters[7]) / 2,
     bitMax: (bitCenters[0] + resetCenter) / 2,
     bitCenters,
+    perBit,
   };
 }
 
@@ -103,6 +153,7 @@ function bitPosition(
   return { msb: best.msb, lsb: best.lsb };
 }
 
+/** BME280 span layout: `name[hi:lo]` cells matched to bit-column spans. */
 function parseBitFields(cells: PositionedText[], cols: Columns): BitField[] {
   const fields: BitField[] = [];
   for (const cell of cells) {
@@ -119,16 +170,59 @@ function parseBitFields(cells: PositionedText[], cols: Columns): BitField[] {
   return fields;
 }
 
+/** Microchip per-bit layout: each named cell snaps to its nearest bit column. */
+function parseBitFieldsPerBit(
+  cells: PositionedText[],
+  cols: Columns,
+): BitField[] {
+  const fields: BitField[] = [];
+  for (const cell of cells) {
+    const name = cell.str.trim();
+    // Skip unimplemented-bit dashes and lone reserved "0"/"1" markers.
+    if (!name || name === "—" || name === "-" || /^[01]$/.test(name)) continue;
+    const c = centerX(cell);
+    let idx = -1;
+    let err = Infinity;
+    for (let i = 0; i <= 7; i++) {
+      if (cols.bitCenters[i] === undefined) continue;
+      const e = Math.abs(c - cols.bitCenters[i]);
+      if (e < err) {
+        err = e;
+        idx = i;
+      }
+    }
+    if (idx < 0) continue;
+    fields.push({ name, msb: idx, lsb: idx });
+  }
+  fields.sort((a, b) => b.msb - a.msb);
+  return fields;
+}
+
+/** "00"/"1A" -> "0x00"/"0x1A". */
+function normalizeAddress(raw: string): string {
+  const m = BARE_HEX.exec(raw);
+  return m ? `0x${m[1].toUpperCase().padStart(2, "0")}` : raw;
+}
+
+/** "1111 1111"/"0000 0000" -> "0xFF"/"0x00". */
+function normalizeReset(raw: string): string {
+  const bits = raw.replace(/\s+/g, "");
+  if (/^[01]{8}$/.test(bits)) {
+    return `0x${Number.parseInt(bits, 2).toString(16).toUpperCase().padStart(2, "0")}`;
+  }
+  return raw;
+}
+
 /** Parse a register map table from a single page, if it holds one. */
 export function parseRegisterTable(page: PageContent): RegisterTable | undefined {
   const rows = clusterRows(page.items);
-  const header = rows.find(isHeader);
-  if (!header) return undefined;
-  const cols = columnsFromHeader(header);
+  const band = findHeaderBand(rows);
+  if (!band) return undefined;
+  const cols = columnsFromHeader(band.header);
   if (!cols) return undefined;
 
   const below = rows
-    .filter((r) => r.y < header.y)
+    .filter((r) => r.y < band.bandBottom)
     .sort((a, b) => b.y - a.y);
 
   const registers: Register[] = [];
@@ -139,16 +233,17 @@ export function parseRegisterTable(page: PageContent): RegisterTable | undefined
       .join(" ")
       .replace(/\s+/g, " ")
       .trim();
-    const address = row.items
+    const rawAddress = row.items
       .filter((it) => centerX(it) >= cols.nameMax && centerX(it) < cols.addrMax)
       .map((it) => it.str)
       .join("")
       .trim();
 
-    // Once a row below the header has no hex address, we've left the table body.
-    if (!HEX.test(address)) break;
+    // Leave the table body once a row has no recognizable address.
+    const addressOk = cols.perBit ? BARE_HEX.test(rawAddress) : HEX.test(rawAddress);
+    if (!addressOk) break;
 
-    const reset = row.items
+    const rawReset = row.items
       .filter((it) => centerX(it) >= cols.bitMax)
       .map((it) => it.str)
       .join(" ")
@@ -159,9 +254,11 @@ export function parseRegisterTable(page: PageContent): RegisterTable | undefined
 
     registers.push({
       name,
-      address,
-      reset,
-      bitFields: parseBitFields(bitCells, cols),
+      address: cols.perBit ? normalizeAddress(rawAddress) : rawAddress,
+      reset: cols.perBit ? normalizeReset(rawReset) : rawReset,
+      bitFields: cols.perBit
+        ? parseBitFieldsPerBit(bitCells, cols)
+        : parseBitFields(bitCells, cols),
     });
   }
 
