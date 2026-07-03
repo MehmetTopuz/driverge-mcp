@@ -16,6 +16,10 @@ const PART_PATTERNS: readonly RegExp[] = [
   /\bSTM32[A-Z]\d[A-Z0-9]+\b/gi,
   /\b(?:PCA|PCF)\d{3,4}[A-Z]?\b/gi, // PCA9555
   /\b(?:TCA|SN65|SN74|ADS)\d{3,4}[A-Z]?\b/gi,
+  /\bTMAG\d{4}\b/gi, // TMAG5170
+  /\b(?:DHT|AHT)\d{2}\b/gi, // DHT20, AHT20
+  /\bAEAT-?\d{3,4}\b/gi, // AEAT-8811
+  /\bTLE\d{4}[A-Z0-9]*\b/gi, // TLE5014, TLE5014SP16D (ordering suffix)
 ];
 
 /** The most frequently occurring vendor part token, uppercased; "" if none. */

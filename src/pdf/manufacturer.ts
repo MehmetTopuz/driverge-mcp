@@ -55,6 +55,24 @@ const VENDORS: readonly VendorRule[] = [
     domain: /sensirion\.com/i,
     partPrefix: /\b(SHT|SCD|SGP)\d/i,
   },
+  {
+    name: "Aosong",
+    copyright: /Aosong|ASAIR/i,
+    domain: /aosong\.com|asair(?:china)?\.com/i,
+    partPrefix: /\b(DHT|AHT)\d/i,
+  },
+  {
+    name: "Broadcom",
+    copyright: /Broadcom|Avago/i,
+    domain: /broadcom\.com/i,
+    partPrefix: /\bAEAT-?\d/i,
+  },
+  {
+    name: "Infineon",
+    copyright: /Infineon/i,
+    domain: /infineon\.com/i,
+    partPrefix: /\b(TLE|TLI|TLV)\d/i,
+  },
 ];
 
 const STRONG = 3;

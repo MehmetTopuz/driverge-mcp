@@ -29,20 +29,26 @@ function normalizeName(raw: string): string {
 /** L4b — bus + device addresses. */
 export function extractProtocol(pages: PageContent[]): Protocol {
   const text = joinText(pages);
+  // SSC/SPC are Infineon's SPI-family serial names (e.g. TLE5014), so treat them
+  // as SPI when neither I2C nor a plain "SPI" mention is present.
   const bus: Protocol["bus"] = /\bI(?:2|²)C\b/i.test(text)
     ? "I2C"
-    : /\bSPI\b/.test(text)
+    : /\bSPI\b|\bSSC\b|\bSPC\b/.test(text)
       ? "SPI"
       : "unknown";
 
   const addresses: string[] = [];
-  // Within each "address …" window, collect every plausible 7-bit I2C address.
-  for (const ctx of text.matchAll(/address[^.]{0,60}/gi)) {
-    for (const m of ctx[0].matchAll(/0x[0-7][0-9a-f]/gi)) {
-      const addr = upperHex(m[0]);
-      const value = Number.parseInt(addr, 16);
-      if (value >= 0x08 && value <= 0x77 && !addresses.includes(addr)) {
-        addresses.push(addr);
+  // Only I2C has a bus device address. Scanning for "0xNN near 'address'" on an
+  // SPI datasheet yields register offsets, not addresses (e.g. AEAT-8811), so we
+  // gate address extraction on the I2C bus.
+  if (bus === "I2C") {
+    for (const ctx of text.matchAll(/address[^.]{0,60}/gi)) {
+      for (const m of ctx[0].matchAll(/0x[0-7][0-9a-f]/gi)) {
+        const addr = upperHex(m[0]);
+        const value = Number.parseInt(addr, 16);
+        if (value >= 0x08 && value <= 0x77 && !addresses.includes(addr)) {
+          addresses.push(addr);
+        }
       }
     }
   }
