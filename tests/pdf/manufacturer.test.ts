@@ -33,6 +33,24 @@ describe("detectManufacturer", () => {
     expect(r.manufacturer).toBe("generic");
     expect(r.confidence).toBe(0);
   });
+
+  it("identifies TI, Aosong, Broadcom, and Infineon from strong signals", () => {
+    expect(detectManufacturer([page("Texas Instruments SBAS934A ti.com TMAG5170-Q1")]).manufacturer).toBe("Texas Instruments");
+    expect(detectManufacturer([page("Aosong(Guangzhou) Electronics aosong.com DHT20")]).manufacturer).toBe("Aosong");
+    expect(detectManufacturer([page("Broadcom Inc. broadcom.com AEAT-8811-Q24")]).manufacturer).toBe("Broadcom");
+    expect(detectManufacturer([page("Infineon Technologies AG www.infineon.com TLE5014")]).manufacturer).toBe("Infineon");
+  });
+});
+
+const TMAG = fileURLToPath(
+  new URL("../fixtures/tmag5170-q1.pdf", import.meta.url),
+);
+
+describe.skipIf(!existsSync(TMAG))("detectManufacturer (real TMAG5170)", () => {
+  it("detects Texas Instruments", async () => {
+    const r = detectManufacturer((await analyzePdfFile(TMAG)).pages);
+    expect(r.manufacturer).toBe("Texas Instruments");
+  });
 });
 
 const FIXTURE = fileURLToPath(

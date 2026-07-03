@@ -19,6 +19,15 @@ describe("extractProtocol", () => {
     expect(p.bus).toBe("I2C");
     expect(p.addresses).toEqual(["0x44", "0x45"]);
   });
+
+  it("reports SPI (incl. Infineon SSC) and emits NO addresses on an SPI part", () => {
+    // "register address 0x10" would be a false I2C address if not gated on bus.
+    const p = extractProtocol([
+      page("The device uses an SSC serial interface. Register address 0x10 holds config."),
+    ]);
+    expect(p.bus).toBe("SPI");
+    expect(p.addresses).toBeUndefined();
+  });
 });
 
 describe("extractCrc", () => {

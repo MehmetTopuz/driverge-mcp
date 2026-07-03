@@ -1,0 +1,132 @@
+{
+  "part": "TMAG5170",
+  "sourcePage": 33,
+  "registers": [
+    {
+      "name": "DEVICE_CONFIG",
+      "address": "0x00",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "SENSOR_CONFIG",
+      "address": "0x01",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "SYSTEM_CONFIG",
+      "address": "0x02",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "ALERT_CONFIG",
+      "address": "0x03",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "X_THRX_CONFIG",
+      "address": "0x04",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "Y_THRX_CONFIG",
+      "address": "0x05",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "Z_THRX_CONFIG",
+      "address": "0x06",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "T_THRX_CONFIG",
+      "address": "0x07",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "CONV_STATUS",
+      "address": "0x08",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "X_CH_RESULT",
+      "address": "0x09",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "Y_CH_RESULT",
+      "address": "0x0A",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "Z_CH_RESULT",
+      "address": "0x0B",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "TEMP_RESULT",
+      "address": "0x0C",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "AFE_STATUS",
+      "address": "0x0D",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "SYS_STATUS",
+      "address": "0x0E",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "TEST_CONFIG",
+      "address": "0x0F",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "OSC_MONITOR",
+      "address": "0x10",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "MAG_GAIN_CONFIG",
+      "address": "0x11",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "MAG_OFFSET_CONFIG",
+      "address": "0x12",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "ANGLE_RESULT",
+      "address": "0x13",
+      "reset": "",
+      "bitFields": []
+    },
+    {
+      "name": "MAGNITUDE_RESULT",
+      "address": "0x14",
+      "reset": "",
+      "bitFields": []
+    }
+  ]
+}
