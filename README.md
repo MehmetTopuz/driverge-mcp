@@ -27,6 +27,38 @@ TypeScript pipeline extracts a *validated, structured JSON* model of the chip, a
 the host AI you're already talking to fills in the reasoning-heavy parts (init
 sequence, vendor quirks, docs). Your datasheet never leaves your machine.
 
+## Why Driverge?
+
+Bringing up a new sensor or IC means hand-transcribing dozens of register
+addresses, bit-field masks, and command codes out of a 40-page PDF — slow work,
+and a classic source of silent bugs (one wrong mask or transposed address and the
+driver "works" but reads garbage). Driverge does that mechanical part
+deterministically and leaves the reasoning to the AI you already use.
+
+- **No hallucinated register maps.** Addresses, bit-field masks, and command codes
+  are *extracted from the datasheet and validated* — not guessed. That's the
+  failure mode of "just ask an LLM to write the whole driver"; here, invalid or
+  incomplete data is rejected before it ever reaches code generation.
+- **Bring your own client — no API keys, no lock-in.** Driverge is a plain MCP
+  server with no embedded LLM. It runs inside whatever MCP client you already use
+  (Claude Desktop, Claude Code, Cursor, …) and reasons with the model you're
+  already paying for — no separate subscription or service.
+- **Private & offline.** The datasheet is parsed locally and never uploaded — safe
+  for NDA'd or unreleased parts.
+- **Deterministic & reproducible.** The same PDF always yields the same JSON and
+  the same driver skeleton — reviewable, diff-able, and testable, not a one-shot
+  black box.
+- **Portable by construction.** One driver core targets any platform through a
+  five-function thin-HAL seam; the native targets (STM32, ESP32) pre-fill that
+  seam for you — switch platforms without touching driver logic.
+- **The AI does only what it's good at.** Register geometry is deterministic;
+  init-sequence ordering, timing quirks, and compensation math need judgment.
+  Driverge marks exactly those spots with `TODO(driverge)` and a `fill_in_brief`,
+  the host AI completes them, then `validate_driver` checks the result.
+
+**Good for:** quickly evaluating a new sensor, prototyping, porting an existing
+driver to a different MCU, or just learning an unfamiliar chip's register map.
+
 ## What it does
 
 1. **Analyze** a datasheet PDF → detect format, manufacturer, and interface kind
