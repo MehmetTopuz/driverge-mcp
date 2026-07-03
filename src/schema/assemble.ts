@@ -9,6 +9,7 @@ import { detectInterfaceKind } from "../pdf/interface-kind.js";
 import { detectManufacturer } from "../pdf/manufacturer.js";
 import { detectPart } from "../pdf/part.js";
 import { findRegisterTable } from "../pdf/register-table.js";
+import { findTiRegisterMap } from "../pdf/ti-register-map.js";
 import type { PageContent, PdfAnalysis } from "../pdf/types.js";
 import type { DatasheetJson, DeviceInterface } from "./types.js";
 import { validateDatasheet } from "./validate.js";
@@ -17,14 +18,19 @@ function buildInterface(pages: PageContent[], kind: string): DeviceInterface {
   if (kind === "command_set") {
     return { kind: "command_set", commands: extractCommands(pages) };
   }
-  // register_map (and "unknown", which we treat as register-first): fall back to
-  // a command set only if no register table is found but commands are present.
-  const table = findRegisterTable(pages);
-  if (!table && kind === "unknown") {
+  // register_map (and "unknown", treated register-first). Try the BME280/
+  // Microchip bit-table extractor, then fall back to the TI register-summary
+  // adapter for that vendor's format.
+  let registers = findRegisterTable(pages)?.registers ?? [];
+  if (registers.length === 0) {
+    registers = findTiRegisterMap(pages)?.registers ?? [];
+  }
+  // Only reclassify as a command set when nothing register-like was found.
+  if (registers.length === 0 && kind === "unknown") {
     const commands = extractCommands(pages);
     if (commands.length > 0) return { kind: "command_set", commands };
   }
-  return { kind: "register_map", registers: table?.registers ?? [] };
+  return { kind: "register_map", registers };
 }
 
 /** Assemble + validate the datasheet contract from a completed PDF analysis. */
