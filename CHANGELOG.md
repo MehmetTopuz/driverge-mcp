@@ -9,6 +9,41 @@ Entries are grouped by the commit area vocabulary from
 
 ## [Unreleased]
 
+### Security
+
+- **MCP Server:** `generate_driver`'s `out_dir` is now confined under
+  `DRIVERGE_OUT_ROOT` (default: the server's own cwd), rejecting any resolved
+  path that escapes the allowed root.
+- **Validation:** `validate_datasheet` guards against structurally invalid
+  input up front, replacing crashes/unhandled exceptions with a clean
+  "invalid datasheet JSON" error.
+- **MCP Server:** fixed a TOCTOU race in `analyze_datasheet`'s file handling.
+- **MCP Server:** the datasheet cache is now a bounded LRU (32 entries),
+  preventing unbounded memory growth across repeated `analyze_datasheet` calls.
+- Note: `pdfjs-dist` ≥ 6 removed the eval glyph code path upstream, so no
+  `isEvalSupported` flag is needed to mitigate it here.
+
+### Fixed
+
+- **Codegen:** the `esp32` and `stm32` targets now refuse SPI parts with a
+  clear `UnsupportedBusError` instead of silently emitting an uncompilable
+  I2C-only seam.
+- **Validation:** `validate_driver`'s brace/paren balance check no longer
+  miscounts braces and parens that appear inside C string and char literals.
+
+### Changed
+
+- **MCP Server:** `analyze_datasheet` now honors `manufacturer_hint` and
+  `interface_kind_hint`, folding them into the cache ref so hinted and
+  unhinted analyses of the same PDF don't collide.
+- **MCP Server:** `validate_driver` no longer advertises an unused `target`
+  input.
+- **MCP Server:** the server now reports its version by reading
+  `package.json` instead of a hardcoded string.
+- **Parser:** `extractPages` now computes `hasImage` lazily, only walking a
+  page's operator list when its text is sparse (below `MIN_TEXT_CHARS`) —
+  the only case the classifier consults it for.
+
 ### Added
 
 - **Parser (L1–L5):** PDF type detection, keyword page map, manufacturer +
