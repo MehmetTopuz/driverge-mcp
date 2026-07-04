@@ -1,7 +1,16 @@
 // pdfjs-dist adapter: load a PDF and pull positioned text + an image flag from
 // every page. The legacy build is the Node-friendly entry (and ships types).
+//
+// hasImage is lazy (Session 10, Phase 4): it is only meaningful — and only
+// computed — for sparse-text pages, i.e. exactly the pages classifyPage()
+// consults it for (textLength < MIN_TEXT_CHARS). A text-rich page always
+// reports hasImage === false without walking its operator list, even if it
+// does paint a raster (logo/figure): nothing reads that value, so paying for
+// getOperatorList() there would be wasted work on the majority of pages in a
+// real datasheet.
 
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { MIN_TEXT_CHARS } from "./classify.js";
 import type { PageContent, PositionedText } from "./types.js";
 
 const IMAGE_OPS: ReadonlySet<number> = new Set([
@@ -44,8 +53,13 @@ export async function extractPages(data: Uint8Array): Promise<PageContent[]> {
         .replace(/\s+/g, " ")
         .trim();
 
-      const opList = await page.getOperatorList();
-      const hasImage = opList.fnArray.some((fn) => IMAGE_OPS.has(fn));
+      // Only pay for the operator-list walk on sparse-text pages: that is
+      // the only case classifyPage() reads hasImage for.
+      let hasImage = false;
+      if (text.length < MIN_TEXT_CHARS) {
+        const opList = await page.getOperatorList();
+        hasImage = opList.fnArray.some((fn) => IMAGE_OPS.has(fn));
+      }
 
       pages.push({ index: n, text, items, hasImage });
       page.cleanup();

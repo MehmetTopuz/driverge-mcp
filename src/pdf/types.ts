@@ -24,7 +24,15 @@ export interface PageContent {
   /** Whitespace-normalized concatenation of the page's text runs. */
   text: string;
   items: PositionedText[];
-  /** Whether the page paints a raster image (a "scanned" signal). */
+  /**
+   * Whether the page paints a raster image (a "scanned" signal).
+   *
+   * Lazily computed: only meaningful for sparse-text pages, i.e. exactly
+   * the pages classifyPage() consults it for (textLength < MIN_TEXT_CHARS).
+   * On a text-rich page this is always `false`, regardless of whether the
+   * page actually paints an image — the extractor skips the operator-list
+   * walk there because nothing reads the value.
+   */
   hasImage: boolean;
 }
 
