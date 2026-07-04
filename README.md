@@ -4,14 +4,15 @@
 <p align="center"><em>Datasheet PDF → embedded C/C++ driver, from any MCP client.</em></p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/driverge-mcp"><img alt="npm" src="https://img.shields.io/npm/v/driverge-mcp"></a>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="status" src="https://img.shields.io/badge/status-pre--release-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-server-black">
 </p>
 
-> 🚧 **Pre-release** — under active development; not yet published to npm. The
-> `npx driverge-mcp` command below is the intended install; until it's published,
-> [run from source](#run-from-source-pre-release).
+> 🚧 **Early pre-release** — [`driverge-mcp`](https://www.npmjs.com/package/driverge-mcp)
+> is on npm, so the `npx driverge-mcp` install below works today. APIs and the
+> JSON schema may still change before v0.1.0; expect rough edges.
 
 ---
 
@@ -85,19 +86,85 @@ changes.
 | **STM32** | CubeHAL `HAL_I2C_Mem_Read/Write` | C | ✅ |
 | **Arduino** | `Wire` / `SPI` | C++ | planned |
 
-- **Offline & private** — the datasheet is parsed locally; nothing is uploaded.
-- **Deterministic** — the same PDF yields the same JSON and the same skeleton.
-- **Cross-platform** — one parsed model, many target bindings.
-
 > ⚠️ **Generated code is a strong draft, not a certified driver.** Init sequences,
 > compensation formulas, and timing quirks are completed by the host AI and
 > **must be reviewed** before use on hardware. Not safety-certified.
+
+## Concepts behind Driverge
+
+Driverge splits driver-writing into two kinds of work: the **mechanical part**
+(register addresses, masks, command tables — extracted and checked by
+deterministic code) and the **judgment part** (init ordering, timing quirks,
+compensation math — completed by the host AI). Everything below exists to keep
+that boundary sharp.
+
+```mermaid
+flowchart LR
+  PDF["Datasheet PDF"]
+  subgraph D["Driverge — deterministic, no LLM"]
+    A["analyze_datasheet<br>L1–L5 parse + validate"]
+    J[("frozen JSON<br>cached under a ref")]
+    G["generate_driver<br>thin-HAL skeleton +<br>TODO(driverge) markers"]
+    V["validate_driver<br>static lint"]
+  end
+  subgraph H["Host AI — reasoning"]
+    F["fill the TODOs: init sequence,<br>quirks, compensation docs"]
+  end
+  OUT["driver.c / driver.h"]
+  PDF --> A --> J --> G --> F --> V
+  V -->|pass| OUT
+  V -->|fail| F
+```
+
+### Deterministic core, reasoning at the edge
+
+Register geometry is mechanical: an address is right or wrong, a mask either
+matches the datasheet or it doesn't. Driverge handles that part with plain
+TypeScript — no internal LLM, no API keys, no sampling — so the output is the
+same on every run. What genuinely needs judgment (in what order to poke the
+registers, which timing quirk applies, how to document a compensation formula)
+is left to the host AI you're already talking to.
+
+### The frozen JSON contract
+
+`analyze_datasheet` runs a five-stage pipeline (L1–L5): detect the PDF type,
+map keyword pages, identify the manufacturer and interface kind, extract the
+register table (or command set + CRC), and validate the result against a frozen
+draft-07 [JSON-Schema contract](schemas/datasheet.schema.json) — also exposed
+as the `driverge://schema` resource. Anything that fails validation is rejected
+*before* code generation, so a bad extraction can never silently become a bad
+driver.
+
+### The `ref` handle
+
+Parsing a datasheet yields a large JSON document; shuttling it through the chat
+context on every call would be slow and lossy. Instead, the parsed model is
+cached server-side under a content-stable `ref`, and the tools pass that handle
+around. The same `ref` with a different `target` re-renders instantly with no
+re-parse, and the full JSON stays readable at `driverge://datasheet/<ref>`.
+
+### The thin-HAL seam
+
+Generated drivers touch hardware through exactly five functions —
+`hal_i2c_read` / `hal_i2c_write` (or the SPI pair) plus `hal_delay_ms` — and
+nothing else. The driver core is therefore identical across platforms; a native
+target (ESP32, STM32) just pre-fills the seam with the vendor calls.
+`validate_driver` enforces this purity: a driver that calls a vendor peripheral
+API outside the seam fails the lint.
+
+### The fill-in loop
+
+The skeleton marks every reasoning gap with a `TODO(driverge)` comment and
+ships a `fill_in_brief` describing what belongs there. The host AI completes
+the markers using the datasheet resource, then `validate_driver` statically
+checks the result — no leftover TODOs, every register reference real, masks
+matching the JSON — and the loop repeats until it passes.
 
 ## Installation
 
 **Prerequisites:** Node.js LTS (≥ 18).
 
-Once published, add Driverge to your MCP client (no build step —
+Add Driverge to your MCP client (no build step —
 [npx](https://docs.npmjs.com/cli/commands/npx) fetches and runs it):
 
 **Claude Desktop** — `claude_desktop_config.json`:
@@ -130,9 +197,9 @@ Once published, add Driverge to your MCP client (no build step —
 Other clients (Codex, Gemini CLI, …) take the same `command` + `args` pair in
 their own MCP config.
 
-### Run from source (pre-release)
+### Run from source (development)
 
-Until the npm package is published:
+To contribute, or to run the latest unreleased changes:
 
 ```bash
 git clone https://github.com/MehmetTopuz/driverge-mcp.git
@@ -184,6 +251,7 @@ docs from the datasheet prose.
 | Tool | `generate_driver` | `ref` + `target` → driver skeleton + `fill_in_brief` |
 | Tool | `validate_driver` | static-lint a completed driver against its `ref` |
 | Tool | `validate_datasheet` | re-run the L5 validator over a `ref` or JSON |
+| Tool | `ping` | health check — confirms the server is running |
 | Resource | `driverge://datasheet/<ref>` | full parsed JSON for an analyzed datasheet |
 | Resource | `driverge://schema` | the frozen datasheet JSON-Schema contract |
 | Prompt | `generate-driver` | guided analyze → generate → fill → validate flow |
