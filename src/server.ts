@@ -7,6 +7,7 @@
 // tools, the datasheet + schema resources, and the generate-driver prompt.
 // See wiki: mcp-tool-usage-flow.
 
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -14,7 +15,24 @@ import { z } from "zod";
 import { registerDriverge } from "./mcp/register.js";
 
 const SERVER_NAME = "driverge-mcp";
-const SERVER_VERSION = "0.0.0";
+
+// Read the version from package.json rather than hardcoding it (Session 10 /
+// Contract B7), so it can't drift from what `npm` actually published. The
+// relative path resolves correctly from BOTH src/ (ts-node/vitest) and dist/
+// (the built, published layout) since both sit exactly one level under the
+// package root. Falls back to "0.0.0" if the file is somehow unreadable —
+// never crash the server over a version string.
+function readServerVersion(): string {
+  try {
+    const url = new URL("../package.json", import.meta.url);
+    const pkg = JSON.parse(readFileSync(fileURLToPath(url), "utf8")) as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+const SERVER_VERSION = readServerVersion();
 
 /**
  * Build a Driverge MCP server with its tools registered. Kept separate from the

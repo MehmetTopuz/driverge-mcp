@@ -95,19 +95,47 @@ export function deriveExtraction(
   return { status: "complete", detectedPages: sections.commandPages };
 }
 
+/**
+ * Optional overrides for the host AI to steer assembly when its own reading of
+ * the datasheet disagrees with (or supplements) the deterministic detectors —
+ * see Session 10 / Contract A. Both are opt-in; omitting `opts` entirely is
+ * byte-identical to today's behavior.
+ */
+export interface AssembleOpts {
+  /**
+   * Manufacturer name to use as a "hint"-style fallback. Applied ONLY when
+   * detectManufacturer lands on the generic default (no confident vendor) — a
+   * confident detection always wins and the hint is silently ignored. When
+   * applied, manufacturerConfidence is pinned to 0.5 (a hint is more than
+   * nothing but less than a confident deterministic match).
+   */
+  manufacturerHint?: string;
+  /**
+   * Forces the interface kind used for BOTH buildInterface and
+   * deriveExtraction, overriding detectInterfaceKind's classification.
+   */
+  interfaceKindHint?: "register_map" | "command_set";
+}
+
 /** Assemble + validate the datasheet contract from a completed PDF analysis. */
-export function assembleDatasheet(analysis: PdfAnalysis): DatasheetJson {
+export function assembleDatasheet(
+  analysis: PdfAnalysis,
+  opts?: AssembleOpts,
+): DatasheetJson {
   const { pages } = analysis;
   const manufacturer = detectManufacturer(pages);
-  const kind = detectInterfaceKind(pages).kind;
+  const kind = opts?.interfaceKindHint ?? detectInterfaceKind(pages).kind;
   const iface = buildInterface(pages, kind);
   const protocol = extractProtocol(pages);
+
+  const manufacturerHint =
+    manufacturer.manufacturer === "generic" ? opts?.manufacturerHint : undefined;
 
   const partial = {
     metadata: {
       part: detectPart(pages),
-      manufacturer: manufacturer.manufacturer,
-      manufacturerConfidence: manufacturer.confidence,
+      manufacturer: manufacturerHint ?? manufacturer.manufacturer,
+      manufacturerConfidence: manufacturerHint !== undefined ? 0.5 : manufacturer.confidence,
       pdfType: analysis.type,
       pageCount: analysis.pageCount,
     },

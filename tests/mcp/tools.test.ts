@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer } from "../../src/server";
 import { generatePortableDriver } from "../../src/codegen/portable";
 import { clearDatasheetCache, putDatasheet } from "../../src/mcp/cache";
@@ -64,6 +65,42 @@ describe("Driverge MCP surface", () => {
         "validate_datasheet",
       ]),
     );
+  });
+
+  // Session 10 / Contract B1 — validate_driver no longer needs a `target`: the
+  // lint rules it applies (thin-HAL purity, TODO markers, register/command
+  // references, bit masks) are read straight from the cached ref's datasheet
+  // JSON, not from the codegen target. Pin: the tool's advertised input schema
+  // must drop `target` entirely, not just make it optional.
+  it("validate_driver's input schema advertises ref/files but not target (B1)", async () => {
+    const client = await connectClient();
+    const tools = (await client.listTools()).tools;
+    const validateDriver = tools.find((t) => t.name === "validate_driver");
+    expect(validateDriver).toBeDefined();
+    const properties =
+      (validateDriver?.inputSchema as { properties?: Record<string, unknown> } | undefined)
+        ?.properties ?? {};
+    expect(Object.keys(properties)).toEqual(expect.arrayContaining(["ref", "files"]));
+    expect(properties).not.toHaveProperty("target");
+  });
+
+  // Session 10 / Contract B — server version should track package.json, not a
+  // hardcoded literal in server.ts. NOTE: this is a regression pin, not a true
+  // RED today — server.ts currently hardcodes SERVER_VERSION = "0.0.0", which
+  // coincidentally EQUALS package.json's current version ("0.0.0"), so this
+  // assertion passes before any code change. The real RED only appears once the
+  // package version is bumped without updating server.ts to match. The
+  // string-shape assertions (non-empty, matches name) are pinned regardless.
+  it("reports a server version matching package.json (regression pin — see comment)", async () => {
+    const client = await connectClient();
+    const pkgPath = fileURLToPath(new URL("../../package.json", import.meta.url));
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version: string };
+    const info = client.getServerVersion();
+    expect(info).toBeDefined();
+    expect(info?.name).toBe("driverge-mcp");
+    expect(typeof info?.version).toBe("string");
+    expect(info?.version.length).toBeGreaterThan(0);
+    expect(info?.version).toBe(pkg.version);
   });
 
   it("generate_driver renders the portable skeleton for a valid ref", async () => {
@@ -180,6 +217,11 @@ describe("Driverge MCP surface", () => {
     expect(firstText(result)).not.toMatch(/Cannot read properties/);
   });
 
+  // Session 10 / Contract A note: analyze_datasheet's hint passthrough
+  // (manufacturer_hint / interface_kind_hint -> assembleDatasheet's opts) is
+  // NOT re-pinned at this tools level — each case would need a full PDF parse,
+  // which is too slow for this suite. The contract is pinned once, cheaply,
+  // against assembleDatasheet directly in tests/schema/assemble.test.ts.
   it("analyze_datasheet reports a clear error for a missing PDF (regression pin)", async () => {
     const client = await connectClient();
     const result = await client.callTool({

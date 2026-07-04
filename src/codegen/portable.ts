@@ -90,10 +90,10 @@ function bitFieldMacros(prefix: string, registers: Register[]): string[] {
 
 function registerDriver(
   json: DatasheetJson,
+  registers: Register[],
   name: string,
   prefix: string,
 ): DriverArtifact {
-  const registers = (json.interface as { registers: Register[] }).registers;
   const spi = json.protocol.bus === "SPI";
   const addr = json.protocol.addresses?.[0];
   const guard = `${prefix}_H`;
@@ -246,10 +246,10 @@ function registerBrief(json: DatasheetJson): FillInBrief {
 
 function commandDriver(
   json: DatasheetJson,
+  commands: Command[],
   name: string,
   prefix: string,
 ): DriverArtifact {
-  const commands = (json.interface as { commands: Command[] }).commands;
   const addr = json.protocol.addresses?.[0];
   const crc = commands.find((c) => c.crc)?.crc;
   const guard = `${prefix}_H`;
@@ -417,12 +417,19 @@ function makeFiles(name: string, header: string[], source: string[]): GeneratedF
   ];
 }
 
-/** Render the portable thin-HAL driver skeleton for a validated datasheet. */
+/**
+ * Render the portable thin-HAL driver skeleton for a validated datasheet.
+ * DeviceInterface is a 2-member discriminated union, so narrowing on `kind`
+ * here — rather than casting inside registerDriver/commandDriver — lets both
+ * take an explicit, correctly-typed array with no cast. Any kind other than
+ * "command_set" is treated as register_map, matching buildInterface's
+ * register-first fallback (see schema/assemble) exactly.
+ */
 export function generatePortableDriver(json: DatasheetJson): DriverArtifact {
   const part = json.metadata.part;
   const name = slug(part);
   const prefix = macro(name);
   return json.interface.kind === "command_set"
-    ? commandDriver(json, name, prefix)
-    : registerDriver(json, name, prefix);
+    ? commandDriver(json, json.interface.commands, name, prefix)
+    : registerDriver(json, json.interface.registers, name, prefix);
 }

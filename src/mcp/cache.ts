@@ -22,10 +22,16 @@ const store = new Map<string, CacheEntry>();
  */
 export const MAX_CACHE_ENTRIES = 32;
 
-/** Idempotent ref for a file: same path + mtime → same ref → cache hit. */
-export function computeRef(pdfPath: string, mtimeMs: number): string {
+/**
+ * Idempotent ref for a file: same path + mtime (+ `extra`) → same ref → cache
+ * hit. `extra` folds in anything else that changes assembly output for the
+ * same file — currently the analyze_datasheet manufacturer/interface-kind
+ * hints (Session 10 / Contract A) — so re-analyzing with different hints
+ * doesn't silently serve a stale cached entry from before the hint existed.
+ */
+export function computeRef(pdfPath: string, mtimeMs: number, extra?: string): string {
   const hash = createHash("sha1")
-    .update(`${pdfPath}:${Math.round(mtimeMs)}`)
+    .update(`${pdfPath}:${Math.round(mtimeMs)}:${extra ?? ""}`)
     .digest("hex");
   return `ds_${hash.slice(0, 12)}`;
 }

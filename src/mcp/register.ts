@@ -86,6 +86,10 @@ function loadSchemaText(): string {
     const url = new URL("../../schemas/datasheet.schema.json", import.meta.url);
     return readFileSync(fileURLToPath(url), "utf8");
   } catch {
+    // stderr is safe for a stdio MCP server (stdout is the protocol channel).
+    console.error(
+      "driverge-mcp: could not read schemas/datasheet.schema.json — serving an empty schema",
+    );
     return "{}";
   }
 }
@@ -103,7 +107,7 @@ export function registerDrivergeTools(server: McpServer): void {
         interface_kind_hint: z.enum(["register_map", "command_set"]).optional(),
       },
     },
-    async ({ pdf_path }) => {
+    async ({ pdf_path, manufacturer_hint, interface_kind_hint }) => {
       // Single stat call (not existsSync + statSync) to close the TOCTOU gap
       // where the file could vanish/change between the check and the read (S4).
       let mtimeMs: number;
@@ -112,7 +116,14 @@ export function registerDrivergeTools(server: McpServer): void {
       } catch {
         return text(`file not found: ${pdf_path}`, true);
       }
-      const ref = computeRef(pdf_path, mtimeMs);
+      // Fold the hints into the ref material (Session 10 / Contract A): the ref
+      // is otherwise path+mtime only, so re-analyzing the same file with
+      // different hints would silently serve a hint-less cached entry.
+      const ref = computeRef(
+        pdf_path,
+        mtimeMs,
+        `${manufacturer_hint ?? ""}:${interface_kind_hint ?? ""}`,
+      );
       const cached = getDatasheet(ref);
       if (cached) return text(buildSummary(cached));
 
@@ -128,7 +139,10 @@ export function registerDrivergeTools(server: McpServer): void {
           true,
         );
       }
-      const json = assembleDatasheet(analysis);
+      const json = assembleDatasheet(analysis, {
+        manufacturerHint: manufacturer_hint,
+        interfaceKindHint: interface_kind_hint,
+      });
       putDatasheet({ ref, pdfPath: pdf_path, json });
       return text(buildSummary({ ref, pdfPath: pdf_path, json }));
     },
@@ -196,7 +210,7 @@ export function registerDrivergeTools(server: McpServer): void {
       title: "Validate driver",
       description:
         "Static-lint a completed driver against its source datasheet `ref`: thin-HAL purity, no leftover TODO(driverge), register/command references exist, bit-field masks match the JSON.",
-      inputSchema: { ref: z.string(), target: TARGET.optional(), files: FILES },
+      inputSchema: { ref: z.string(), files: FILES },
     },
     async ({ ref, files }) => {
       const entry = getDatasheet(ref);
