@@ -8,6 +8,7 @@
 // address = the offset) that codegen turns into address #defines. Bit-field
 // extraction from the per-register tables is a separate, 16-bit-aware follow-up.
 
+import { findTiFieldDescriptions } from "./ti-field-descriptions.js";
 import { clusterRows, type TableRow } from "./table.js";
 import type { PageContent, Register, RegisterTable } from "./types.js";
 
@@ -77,5 +78,19 @@ export function findTiRegisterMap(
     }
   }
 
-  return firstPage === undefined ? undefined : { page: firstPage, registers };
+  if (firstPage === undefined) return undefined;
+
+  // Enrich the summary with per-register bit fields from the separate "Register
+  // Field Descriptions" tables (16-bit registers — see ti-field-descriptions and
+  // register-width). Registers without a field table stay address-only (width 8).
+  const detail = findTiFieldDescriptions(pages);
+  for (const r of registers) {
+    const table = detail.get(r.name);
+    if (table) {
+      r.width = table.width;
+      r.bitFields = table.bitFields;
+    }
+  }
+
+  return { page: firstPage, registers };
 }

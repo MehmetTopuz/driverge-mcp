@@ -6,127 +6,564 @@
       "name": "DEVICE_CONFIG",
       "address": "0x00",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "CONV_AVG",
+          "msb": 14,
+          "lsb": 12
+        },
+        {
+          "name": "MAG_TEMPCO",
+          "msb": 9,
+          "lsb": 8
+        },
+        {
+          "name": "OPERATING_MODE",
+          "msb": 6,
+          "lsb": 4
+        },
+        {
+          "name": "T_CH_EN",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "T_RATE",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "T_HLT_EN",
+          "msb": 1,
+          "lsb": 1
+        }
+      ],
+      "width": 16
     },
     {
       "name": "SENSOR_CONFIG",
       "address": "0x01",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "ANGLE_EN",
+          "msb": 15,
+          "lsb": 14
+        },
+        {
+          "name": "SLEEPTIME",
+          "msb": 13,
+          "lsb": 10
+        },
+        {
+          "name": "MAG_CH_EN",
+          "msb": 9,
+          "lsb": 6
+        },
+        {
+          "name": "Z_RANGE",
+          "msb": 5,
+          "lsb": 4
+        },
+        {
+          "name": "Y_RANGE",
+          "msb": 3,
+          "lsb": 2
+        },
+        {
+          "name": "X_RANGE",
+          "msb": 1,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "SYSTEM_CONFIG",
       "address": "0x02",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "DIAG_SEL",
+          "msb": 13,
+          "lsb": 12
+        },
+        {
+          "name": "TRIGGER_MODE",
+          "msb": 10,
+          "lsb": 9
+        },
+        {
+          "name": "DATA_TYPE",
+          "msb": 8,
+          "lsb": 6
+        },
+        {
+          "name": "DIAG_EN",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "Z_HLT_EN",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "Y_HLT_EN",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "X_HLT_EN",
+          "msb": 0,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "ALERT_CONFIG",
       "address": "0x03",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "ALERT_LATCH",
+          "msb": 13,
+          "lsb": 13
+        },
+        {
+          "name": "ALERT_MODE",
+          "msb": 12,
+          "lsb": 12
+        },
+        {
+          "name": "STATUS_ALRT",
+          "msb": 11,
+          "lsb": 11
+        },
+        {
+          "name": "RSLT_ALRT",
+          "msb": 8,
+          "lsb": 8
+        },
+        {
+          "name": "THRX_COUNT",
+          "msb": 5,
+          "lsb": 4
+        },
+        {
+          "name": "T_THRX_ALRT",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "Z_THRX_ALRT",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "Y_THRX_ALRT",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "X_THRX_ALRT",
+          "msb": 0,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "X_THRX_CONFIG",
       "address": "0x04",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "X_HI_THRESHOLD",
+          "msb": 15,
+          "lsb": 8
+        },
+        {
+          "name": "X_LO_THRESHOLD",
+          "msb": 7,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "Y_THRX_CONFIG",
       "address": "0x05",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "Y_HI_THRESHOLD",
+          "msb": 15,
+          "lsb": 8
+        },
+        {
+          "name": "Y_LO_THRESHOLD",
+          "msb": 7,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "Z_THRX_CONFIG",
       "address": "0x06",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "Z_HI_THRESHOLD",
+          "msb": 15,
+          "lsb": 8
+        },
+        {
+          "name": "Z_LO_THRESHOLD",
+          "msb": 7,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "T_THRX_CONFIG",
       "address": "0x07",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "T_HI_THRESHOLD",
+          "msb": 15,
+          "lsb": 8
+        },
+        {
+          "name": "T_LO_THRESHOLD",
+          "msb": 7,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "CONV_STATUS",
       "address": "0x08",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "RDY",
+          "msb": 13,
+          "lsb": 13
+        },
+        {
+          "name": "A",
+          "msb": 12,
+          "lsb": 12
+        },
+        {
+          "name": "T",
+          "msb": 11,
+          "lsb": 11
+        },
+        {
+          "name": "Z",
+          "msb": 10,
+          "lsb": 10
+        },
+        {
+          "name": "Y",
+          "msb": 9,
+          "lsb": 9
+        },
+        {
+          "name": "X",
+          "msb": 8,
+          "lsb": 8
+        },
+        {
+          "name": "SET_COUNT",
+          "msb": 6,
+          "lsb": 4
+        },
+        {
+          "name": "ALRT_STATUS",
+          "msb": 1,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "X_CH_RESULT",
       "address": "0x09",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "X_CH_RESULT",
+          "msb": 15,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "Y_CH_RESULT",
       "address": "0x0A",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "Y_CH_RESULT",
+          "msb": 15,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "Z_CH_RESULT",
       "address": "0x0B",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "Z_CH_RESULT",
+          "msb": 15,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "TEMP_RESULT",
       "address": "0x0C",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "TEMP_RESULT",
+          "msb": 15,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "AFE_STATUS",
       "address": "0x0D",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "CFG_RESET",
+          "msb": 15,
+          "lsb": 15
+        },
+        {
+          "name": "SENS_STAT",
+          "msb": 12,
+          "lsb": 12
+        },
+        {
+          "name": "TEMP_STAT",
+          "msb": 11,
+          "lsb": 11
+        },
+        {
+          "name": "ZHS_STAT",
+          "msb": 10,
+          "lsb": 10
+        },
+        {
+          "name": "YHS_STAT",
+          "msb": 9,
+          "lsb": 9
+        },
+        {
+          "name": "XHS_STAT",
+          "msb": 8,
+          "lsb": 8
+        },
+        {
+          "name": "TRIM_STAT",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "LDO_STAT",
+          "msb": 0,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "SYS_STATUS",
       "address": "0x0E",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "ALRT_LVL",
+          "msb": 15,
+          "lsb": 15
+        },
+        {
+          "name": "ALRT_DRV",
+          "msb": 14,
+          "lsb": 14
+        },
+        {
+          "name": "SDO_DRV",
+          "msb": 13,
+          "lsb": 13
+        },
+        {
+          "name": "CRC_STAT",
+          "msb": 12,
+          "lsb": 12
+        },
+        {
+          "name": "FRAME_STAT",
+          "msb": 11,
+          "lsb": 11
+        },
+        {
+          "name": "OPERATING_STAT",
+          "msb": 10,
+          "lsb": 8
+        },
+        {
+          "name": "VCC_OV",
+          "msb": 5,
+          "lsb": 5
+        },
+        {
+          "name": "VCC_UV",
+          "msb": 4,
+          "lsb": 4
+        },
+        {
+          "name": "TEMP_THX",
+          "msb": 3,
+          "lsb": 3
+        },
+        {
+          "name": "ZCH_THX",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "YCH_THX",
+          "msb": 1,
+          "lsb": 1
+        },
+        {
+          "name": "XCH_THX",
+          "msb": 0,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "TEST_CONFIG",
       "address": "0x0F",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "VER",
+          "msb": 5,
+          "lsb": 4
+        },
+        {
+          "name": "CRC_DIS",
+          "msb": 2,
+          "lsb": 2
+        },
+        {
+          "name": "OSC_CNT_CTL",
+          "msb": 1,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "OSC_MONITOR",
       "address": "0x10",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "OSC_COUNT",
+          "msb": 15,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "MAG_GAIN_CONFIG",
       "address": "0x11",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "GAIN_SELECTION",
+          "msb": 15,
+          "lsb": 14
+        },
+        {
+          "name": "GAIN_VALUE",
+          "msb": 10,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "MAG_OFFSET_CONFIG",
       "address": "0x12",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "OFFSET_SELECTION",
+          "msb": 15,
+          "lsb": 14
+        },
+        {
+          "name": "OFFSET_VALUE1",
+          "msb": 13,
+          "lsb": 7
+        },
+        {
+          "name": "OFFSET_VALUE2",
+          "msb": 6,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "ANGLE_RESULT",
       "address": "0x13",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "ANGLE_RESULT",
+          "msb": 15,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     },
     {
       "name": "MAGNITUDE_RESULT",
       "address": "0x14",
       "reset": "",
-      "bitFields": []
+      "bitFields": [
+        {
+          "name": "MAGNITUDE_RESULT",
+          "msb": 15,
+          "lsb": 0
+        }
+      ],
+      "width": 16
     }
   ]
 }
