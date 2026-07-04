@@ -197,6 +197,13 @@ Add Driverge to your MCP client (no build step —
 Other clients (Codex, Gemini CLI, …) take the same `command` + `args` pair in
 their own MCP config.
 
+**No clone, no global install.** The config above tells your MCP client to
+launch `npx -y driverge-mcp`; npx downloads Driverge from the npm registry on
+first run, caches it, and starts it automatically each time the client does
+(`-y` skips npx's install prompt). You never run it by hand — to confirm it's
+wired up, ask your client to run the `ping` tool, which replies `pong`. Cloning
+the repo (below) is only for development.
+
 ### Run from source (development)
 
 To contribute, or to run the latest unreleased changes:
