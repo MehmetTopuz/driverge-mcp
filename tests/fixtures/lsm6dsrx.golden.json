@@ -1,0 +1,810 @@
+{
+  "metadata": {
+    "part": "LSM6DSRX",
+    "manufacturer": "STMicroelectronics",
+    "manufacturerConfidence": 1,
+    "pdfType": "text_based",
+    "pageCount": 171
+  },
+  "protocol": {
+    "bus": "I2C",
+    "addresses": [
+      "0x6B",
+      "0x6A",
+      "0x08"
+    ]
+  },
+  "interface": {
+    "kind": "register_map",
+    "registers": [
+      {
+        "name": "FUNC_CFG_ACCESS",
+        "address": "0x01",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "FUNC_CFG_ACCESS",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "SHUB_REG_ACCESS",
+            "msb": 6,
+            "lsb": 6
+          }
+        ]
+      },
+      {
+        "name": "PIN_CTRL",
+        "address": "0x02",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "OIS_PU_DIS",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "SDO_PU_EN",
+            "msb": 6,
+            "lsb": 6
+          }
+        ]
+      },
+      {
+        "name": "S4S_TPH_L",
+        "address": "0x04",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "TPH_H_SEL",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "TPH_L",
+            "msb": 6,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "S4S_TPH_H",
+        "address": "0x05",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "TPH_H",
+            "msb": 7,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "S4S_RR",
+        "address": "0x06",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "RR",
+            "msb": 1,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "FIFO_CTRL1",
+        "address": "0x07",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "WTM",
+            "msb": 7,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "FIFO_CTRL2",
+        "address": "0x08",
+        "reset": "",
+        "bitFields": []
+      },
+      {
+        "name": "FIFO_CTRL3",
+        "address": "0x09",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "BDR_GY",
+            "msb": 7,
+            "lsb": 4
+          },
+          {
+            "name": "BDR_XL",
+            "msb": 3,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "FIFO_CTRL4",
+        "address": "0x0A",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "DEC_TS_BATCH",
+            "msb": 7,
+            "lsb": 6
+          },
+          {
+            "name": "ODR_T_BATCH",
+            "msb": 5,
+            "lsb": 4
+          },
+          {
+            "name": "FIFO_MODE",
+            "msb": 2,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "COUNTER_BDR_REG1",
+        "address": "0x0B",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "RST_COUNTER_BDR",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "TRIG_COUNTER_BDR",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "CNT_BDR_TH",
+            "msb": 2,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "COUNTER_BDR_REG2",
+        "address": "0x0C",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "CNT_BDR_TH",
+            "msb": 7,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "INT1_CTRL",
+        "address": "0x0D",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "INT1_CNT_BDR",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "INT1_FIFO_FULL",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "INT1_FIFO_OVR",
+            "msb": 4,
+            "lsb": 4
+          },
+          {
+            "name": "INT1_FIFO_TH",
+            "msb": 3,
+            "lsb": 3
+          },
+          {
+            "name": "INT1_BOOT",
+            "msb": 2,
+            "lsb": 2
+          },
+          {
+            "name": "INT1_DRDY_G",
+            "msb": 1,
+            "lsb": 1
+          },
+          {
+            "name": "INT1_DRDY_XL",
+            "msb": 0,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "INT2_CTRL",
+        "address": "0x0E",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "INT2_CNT_BDR",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "INT2_FIFO_FULL",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "INT2_FIFO_OVR",
+            "msb": 4,
+            "lsb": 4
+          },
+          {
+            "name": "INT2_DRDY_TEMP",
+            "msb": 2,
+            "lsb": 2
+          },
+          {
+            "name": "INT2_DRDY_G",
+            "msb": 1,
+            "lsb": 1
+          },
+          {
+            "name": "INT2_DRDY_XL",
+            "msb": 0,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "WHO_AM_I",
+        "address": "0x0F",
+        "reset": "",
+        "bitFields": []
+      },
+      {
+        "name": "CTRL1_XL",
+        "address": "0x10",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "ODR_XL",
+            "msb": 7,
+            "lsb": 4
+          },
+          {
+            "name": "FS_XL",
+            "msb": 3,
+            "lsb": 2
+          },
+          {
+            "name": "LPF2_XL_EN",
+            "msb": 1,
+            "lsb": 1
+          }
+        ]
+      },
+      {
+        "name": "CTRL2_G",
+        "address": "0x11",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "ODR_G",
+            "msb": 7,
+            "lsb": 4
+          },
+          {
+            "name": "FS_G",
+            "msb": 3,
+            "lsb": 2
+          },
+          {
+            "name": "FS_125",
+            "msb": 1,
+            "lsb": 1
+          },
+          {
+            "name": "FS_4000",
+            "msb": 0,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "CTRL3_C",
+        "address": "0x12",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "BOOT",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "BDU",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "H_LACTIVE",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "PP_OD",
+            "msb": 4,
+            "lsb": 4
+          },
+          {
+            "name": "SIM",
+            "msb": 3,
+            "lsb": 3
+          },
+          {
+            "name": "IF_INC",
+            "msb": 2,
+            "lsb": 2
+          },
+          {
+            "name": "SW_RESET",
+            "msb": 0,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "CTRL4_C",
+        "address": "0x13",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "SLEEP_G",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "DRDY_MASK",
+            "msb": 3,
+            "lsb": 3
+          },
+          {
+            "name": "LPF1_SEL_G",
+            "msb": 1,
+            "lsb": 1
+          }
+        ]
+      },
+      {
+        "name": "CTRL5_C",
+        "address": "0x14",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "ROUNDING",
+            "msb": 6,
+            "lsb": 5
+          },
+          {
+            "name": "ST_G",
+            "msb": 3,
+            "lsb": 2
+          },
+          {
+            "name": "ST_XL",
+            "msb": 1,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "CTRL6_C",
+        "address": "0x15",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "TRIG_EN",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "LVL1_EN",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "LVL2_EN",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "XL_HM_MODE",
+            "msb": 4,
+            "lsb": 4
+          },
+          {
+            "name": "USR_OFF_W",
+            "msb": 3,
+            "lsb": 3
+          }
+        ]
+      },
+      {
+        "name": "CTRL7_G",
+        "address": "0x16",
+        "reset": "",
+        "bitFields": []
+      },
+      {
+        "name": "CTRL8_XL",
+        "address": "0x17",
+        "reset": "",
+        "bitFields": []
+      },
+      {
+        "name": "CTRL9_XL",
+        "address": "0x18",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "DEN_X",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "DEN_Y",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "DEN_Z",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "DEN_XL_G",
+            "msb": 4,
+            "lsb": 4
+          },
+          {
+            "name": "DEN_XL_EN",
+            "msb": 3,
+            "lsb": 3
+          },
+          {
+            "name": "DEN_LH",
+            "msb": 2,
+            "lsb": 2
+          }
+        ]
+      },
+      {
+        "name": "CTRL10_C",
+        "address": "0x19",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "TIMESTAMP_EN",
+            "msb": 5,
+            "lsb": 5
+          }
+        ]
+      },
+      {
+        "name": "ALL_INT_SRC",
+        "address": "0x1A",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "TIMESTAMP_ENDCOUNT",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "SLEEP_CHANGE_IA",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "D6D_IA",
+            "msb": 4,
+            "lsb": 4
+          },
+          {
+            "name": "DOUBLE_TAP",
+            "msb": 3,
+            "lsb": 3
+          },
+          {
+            "name": "SINGLE_TAP",
+            "msb": 2,
+            "lsb": 2
+          },
+          {
+            "name": "WU_IA",
+            "msb": 1,
+            "lsb": 1
+          },
+          {
+            "name": "FF_IA",
+            "msb": 0,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "WAKE_UP_SRC",
+        "address": "0x1B",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "SLEEP_CHANGE_IA",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "FF_IA",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "SLEEP_STATE",
+            "msb": 4,
+            "lsb": 4
+          },
+          {
+            "name": "WU_IA",
+            "msb": 3,
+            "lsb": 3
+          },
+          {
+            "name": "X_WU",
+            "msb": 2,
+            "lsb": 2
+          },
+          {
+            "name": "Y_WU",
+            "msb": 1,
+            "lsb": 1
+          },
+          {
+            "name": "Z_WU",
+            "msb": 0,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "TAP_SRC",
+        "address": "0x1C",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "TAP_IA",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "SINGLE_TAP",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "TAP_SIGN",
+            "msb": 3,
+            "lsb": 3
+          },
+          {
+            "name": "X_TAP",
+            "msb": 2,
+            "lsb": 2
+          },
+          {
+            "name": "Y_TAP",
+            "msb": 1,
+            "lsb": 1
+          },
+          {
+            "name": "Z_TAP",
+            "msb": 0,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "D6D_SRC",
+        "address": "0x1D",
+        "reset": "",
+        "bitFields": [
+          {
+            "name": "DEN_DRDY",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "D6D_IA",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "ZH",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "ZL",
+            "msb": 4,
+            "lsb": 4
+          },
+          {
+            "name": "YH",
+            "msb": 3,
+            "lsb": 3
+          },
+          {
+            "name": "YL",
+            "msb": 2,
+            "lsb": 2
+          },
+          {
+            "name": "XH",
+            "msb": 1,
+            "lsb": 1
+          },
+          {
+            "name": "XL",
+            "msb": 0,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "STATUS_REG (1) /STATUS_SPIAux",
+        "address": "0x1E",
+        "reset": "",
+        "bitFields": []
+      },
+      {
+        "name": "OUT_TEMP_L",
+        "address": "0x20",
+        "reset": "",
+        "bitFields": []
+      },
+      {
+        "name": "OUT_TEMP_H",
+        "address": "0x21",
+        "reset": "",
+        "bitFields": []
+      }
+    ]
+  },
+  "extraction": {
+    "status": "complete",
+    "detectedPages": [
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+      99,
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110,
+      111,
+      112,
+      113,
+      114,
+      115,
+      116,
+      117,
+      118,
+      119,
+      120,
+      121,
+      125,
+      126,
+      127,
+      128,
+      129,
+      130,
+      131,
+      132,
+      133,
+      134,
+      135,
+      136,
+      137,
+      138,
+      139,
+      140,
+      141,
+      142,
+      143,
+      144,
+      145,
+      146,
+      147,
+      148,
+      155,
+      158,
+      159,
+      160,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167,
+      168,
+      169
+    ]
+  },
+  "validation": {
+    "valid": true,
+    "errors": [],
+    "warnings": []
+  }
+}

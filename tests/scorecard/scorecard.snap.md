@@ -9,5 +9,5 @@
 | 5193_DHT20.pdf | DHT20 | Aosong | command_set | I2C | 0 | 0 | 2 | complete | yes |
 | AEAT-8811-Q24_DS.pdf | AEAT-8811 | Broadcom | register_map | SPI | 4 | 0 | 0 | partial | yes |
 | infineon-tle5014sp16d-e0002-datasheet-en.pdf | TLE5014SP16D | Infineon | register_map | SPI | 0 | 0 | 0 | deferred | yes |
-| lsm6dsrx.pdf | LSM6DSRX | STMicroelectronics | register_map | I2C | 31 | 0 | 0 | partial | yes |
+| lsm6dsrx.pdf | LSM6DSRX | STMicroelectronics | register_map | I2C | 31 | 91 | 0 | complete | yes |
 | vl53l3cx.pdf | — | STMicroelectronics | register_map | I2C | 0 | 0 | 0 | deferred | yes |

@@ -11,6 +11,7 @@ import { detectManufacturer } from "../pdf/manufacturer.js";
 import { detectPart } from "../pdf/part.js";
 import { extractProseCommands } from "../pdf/prose-commands.js";
 import { findRegisterTable } from "../pdf/register-table.js";
+import { findStBitFields } from "../pdf/st-bit-layout.js";
 import { findTiRegisterMap } from "../pdf/ti-register-map.js";
 import type { InterfaceKind, PageContent, PdfAnalysis } from "../pdf/types.js";
 import type { DatasheetJson, DeviceInterface, Extraction } from "./types.js";
@@ -33,6 +34,19 @@ function buildInterface(pages: PageContent[], kind: string): DeviceInterface {
   }
   if (registers.length === 0) {
     registers = findGenericRegisterTable(pages)?.registers ?? [];
+    // Enrich with ST's two-stacked-table bit-layout format (see
+    // st-bit-layout): a name-only match against the generic table's rows, so
+    // non-ST datasheets (an empty map) leave the address-only registers
+    // untouched.
+    if (registers.length > 0) {
+      const stFields = findStBitFields(pages);
+      if (stFields.size > 0) {
+        for (const r of registers) {
+          const bf = stFields.get(r.name);
+          if (bf) r.bitFields = bf;
+        }
+      }
+    }
   }
   // Only reclassify as a command set when nothing register-like was found.
   if (registers.length === 0 && kind === "unknown") {
