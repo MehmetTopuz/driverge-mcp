@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { generateDriver } from "../../src/codegen";
+import { generateDriver, generateStm32Driver, UnsupportedBusError } from "../../src/codegen";
 import { generatePortableDriver } from "../../src/codegen/portable";
 import { lintDriver } from "../../src/codegen/lint";
+import type { DatasheetJson } from "../../src/schema/types";
 import { commandDatasheet, registerDatasheet } from "./helpers";
 
 describe("generateDriver target=stm32 (register_map, BME280)", () => {
@@ -46,6 +47,33 @@ describe("generateDriver target=stm32 (command_set, SHT3x)", () => {
     expect(art.files.find((f) => f.path === "sht3x_hal_stm32.c")!.content).toContain(
       "HAL_I2C_Mem_Write(",
     );
+  });
+});
+
+describe("generateStm32Driver refuses a SPI part (B1 regression pin)", () => {
+  // Mirrors the ESP32 pin: the CubeHAL seam references `${PREFIX}_I2C_ADDR`,
+  // which the portable core never defines for a SPI part.
+  const spiJson: DatasheetJson = {
+    ...registerDatasheet("bme280.golden.json", "BME280"),
+    protocol: { bus: "SPI" },
+  };
+
+  it("throws UnsupportedBusError instead of emitting an I2C-only HAL seam", () => {
+    expect(() => generateStm32Driver(spiJson)).toThrow(UnsupportedBusError);
+  });
+
+  it("names the target, the bus, and points at the still-working portable target", () => {
+    let caught: unknown;
+    try {
+      generateStm32Driver(spiJson);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(UnsupportedBusError);
+    const message = (caught as Error).message;
+    expect(message).toMatch(/stm32/i);
+    expect(message).toMatch(/SPI/);
+    expect(message).toMatch(/portable/);
   });
 });
 

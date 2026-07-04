@@ -43,7 +43,17 @@ export function lintDriver(
   const prefix = prefixOf(json.metadata.part);
   const all = files.map((f) => `/* ${f.path} */\n${f.content}`).join("\n\n");
   // Comments carry the TODO markers and prose; strip them before code-shape checks.
-  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+  // String/char literal BODIES are stripped too (after comments) so a stray brace
+  // or paren inside "..." or '...' never throws off the balance check — and, as a
+  // side effect, keeps the forbidden-API/hal_*/reference scans from matching text
+  // that only appears inside a literal. `all` (TODO detection, #define scans) stays
+  // unstripped on purpose.
+  const strip = (s: string) =>
+    s
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/\/\/[^\n]*/g, " ")
+      .replace(/"(?:\\.|[^"\\])*"/g, " ")
+      .replace(/'(?:\\.|[^'\\])*'/g, " ");
   const code = strip(all);
   // Thin-HAL purity applies to the driver CORE, not the seam implementation:
   // a native target's <part>_hal_<target>.c is *where* platform calls belong.

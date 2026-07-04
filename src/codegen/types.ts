@@ -36,3 +36,32 @@ export interface DriverArtifact {
   files: GeneratedFile[];
   fill_in_brief: FillInBrief;
 }
+
+/** arduino lands in a later session; portable + esp32 + stm32 render today. */
+export class UnsupportedTargetError extends Error {
+  constructor(public readonly target: string) {
+    super(
+      `codegen target "${target}" is not available yet — supported targets: portable, esp32, stm32`,
+    );
+    this.name = "UnsupportedTargetError";
+  }
+}
+
+/**
+ * Thrown by a native target (esp32, stm32) when the datasheet's protocol bus
+ * isn't the one its HAL seam implements. The seams reference `${PREFIX}_I2C_ADDR`,
+ * a macro the portable core only defines for I2C parts — emitting the seam for a
+ * SPI (or unknown-bus) part would produce uncompilable output, so the generator
+ * refuses instead. The portable target has no such constraint and still works.
+ */
+export class UnsupportedBusError extends Error {
+  constructor(
+    public readonly target: string,
+    public readonly bus: string,
+  ) {
+    super(
+      `codegen target "${target}" supports I2C parts only — this datasheet is ${bus}; use the "portable" target for ${bus} parts`,
+    );
+    this.name = "UnsupportedBusError";
+  }
+}

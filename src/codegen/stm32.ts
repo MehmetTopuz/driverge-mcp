@@ -3,10 +3,15 @@
 // <part>_hal_stm32.c that implements hal_i2c_*/hal_delay_ms with STM32 CubeHAL
 // (HAL_I2C_Mem_Read/Write, HAL_Delay). The user binds their I2C handle once via
 // <part>_stm32_bind(); the board/clock bring-up stays in their CubeMX project.
+//
+// I2C-only: the seam hard-codes CubeHAL's HAL_I2C_Mem_* calls and references
+// `${PREFIX}_I2C_ADDR`, so this target refuses (UnsupportedBusError) any part
+// whose protocol.bus isn't "I2C" rather than emit an uncompilable seam.
 
 import type { DatasheetJson } from "../schema/types.js";
 import { prefixOf, slug } from "./ident.js";
 import { generatePortableDriver } from "./portable.js";
+import { UnsupportedBusError } from "./types.js";
 import type { DriverArtifact, GeneratedFile } from "./types.js";
 
 function halImpl(name: string, prefix: string): GeneratedFile {
@@ -55,6 +60,9 @@ function halImpl(name: string, prefix: string): GeneratedFile {
 
 /** Portable core + a CubeHAL seam implementation for the same part. */
 export function generateStm32Driver(json: DatasheetJson): DriverArtifact {
+  if (json.protocol.bus !== "I2C") {
+    throw new UnsupportedBusError("stm32", json.protocol.bus);
+  }
   const name = slug(json.metadata.part);
   const prefix = prefixOf(json.metadata.part);
   const base = generatePortableDriver(json);

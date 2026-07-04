@@ -4,10 +4,15 @@
 // <part>_hal_esp32.c that implements hal_i2c_*/hal_delay_ms with the ESP-IDF v5
 // i2c_master driver. The user drops all three files into an ESP-IDF component;
 // only the board's bus/pin bring-up stays a TODO(driverge).
+//
+// I2C-only: the seam hard-codes the ESP-IDF i2c_master driver and references
+// `${PREFIX}_I2C_ADDR`, so this target refuses (UnsupportedBusError) any part
+// whose protocol.bus isn't "I2C" rather than emit an uncompilable seam.
 
 import type { DatasheetJson } from "../schema/types.js";
 import { prefixOf, slug } from "./ident.js";
 import { generatePortableDriver } from "./portable.js";
+import { UnsupportedBusError } from "./types.js";
 import type { DriverArtifact, GeneratedFile } from "./types.js";
 
 function halImpl(name: string, prefix: string): GeneratedFile {
@@ -69,6 +74,9 @@ function halImpl(name: string, prefix: string): GeneratedFile {
 
 /** Portable core + an ESP-IDF seam implementation for the same part. */
 export function generateEsp32Driver(json: DatasheetJson): DriverArtifact {
+  if (json.protocol.bus !== "I2C") {
+    throw new UnsupportedBusError("esp32", json.protocol.bus);
+  }
   const name = slug(json.metadata.part);
   const prefix = prefixOf(json.metadata.part);
   const base = generatePortableDriver(json);

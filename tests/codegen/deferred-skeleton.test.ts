@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { UnsupportedBusError } from "../../src/codegen";
 import { generateEsp32Driver } from "../../src/codegen/esp32";
 import { generatePortableDriver } from "../../src/codegen/portable";
 import type { DatasheetJson } from "../../src/schema/types";
@@ -18,6 +19,24 @@ const deferredRegister: DatasheetJson = {
   protocol: { bus: "SPI" },
   interface: { kind: "register_map", registers: [] },
   extraction: { status: "deferred", detectedPages: [23] },
+  validation: { valid: true, errors: [], warnings: ["register map deferred"] },
+};
+
+// I2C twin of deferredRegister, used to exercise esp32 deferred-propagation now
+// that generateEsp32Driver refuses SPI parts (see B1 mirror pin below) — the
+// deferred-propagation contract itself is bus-agnostic, so it needs an I2C part
+// to observe on a native I2C-only target.
+const deferredRegisterI2c: DatasheetJson = {
+  metadata: {
+    part: "PCA9555",
+    manufacturer: "NXP",
+    manufacturerConfidence: 1,
+    pdfType: "text_based",
+    pageCount: 24,
+  },
+  protocol: { bus: "I2C", addresses: ["0x20"] },
+  interface: { kind: "register_map", registers: [] },
+  extraction: { status: "deferred", detectedPages: [12] },
   validation: { valid: true, errors: [], warnings: ["register map deferred"] },
 };
 
@@ -73,10 +92,23 @@ describe("generatePortableDriver — deferred register map", () => {
     }
   });
 
-  it("propagates the deferred skeleton to the esp32 target", () => {
-    const e = generateEsp32Driver(deferredRegister);
+  it("propagates the deferred skeleton to the esp32 target (I2C part)", () => {
+    const e = generateEsp32Driver(deferredRegisterI2c);
     expect(e.files.some((f) => /TODO\(driverge\)/.test(f.content))).toBe(true);
     expect(e.fill_in_brief.register_map_todo).toBeTruthy();
+  });
+
+  it("refuses the SPI deferred part on esp32 instead of an I2C-only seam (B1 mirror pin)", () => {
+    expect(() => generateEsp32Driver(deferredRegister)).toThrow(UnsupportedBusError);
+    let caught: unknown;
+    try {
+      generateEsp32Driver(deferredRegister);
+    } catch (err) {
+      caught = err;
+    }
+    const message = (caught as Error).message;
+    expect(message).toMatch(/SPI/);
+    expect(message).toMatch(/portable/);
   });
 });
 

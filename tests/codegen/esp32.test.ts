@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { generateDriver } from "../../src/codegen";
+import { generateDriver, generateEsp32Driver, UnsupportedBusError } from "../../src/codegen";
 import { generatePortableDriver } from "../../src/codegen/portable";
 import { lintDriver } from "../../src/codegen/lint";
+import type { DatasheetJson } from "../../src/schema/types";
 import { commandDatasheet, registerDatasheet } from "./helpers";
 
 describe("generateDriver target=esp32 (register_map, BME280)", () => {
@@ -50,6 +51,34 @@ describe("generateDriver target=esp32 (command_set, SHT3x)", () => {
     expect(art.files.find((f) => f.path === "sht3x_hal_esp32.c")!.content).toContain(
       "i2c_master_transmit(",
     );
+  });
+});
+
+describe("generateEsp32Driver refuses a SPI part (B1 regression pin)", () => {
+  // The I2C-only ESP-IDF seam references `${PREFIX}_I2C_ADDR`, a macro the
+  // portable core never defines for a SPI part — that would emit uncompilable
+  // output. The generator must refuse cleanly instead.
+  const spiJson: DatasheetJson = {
+    ...registerDatasheet("bme280.golden.json", "BME280"),
+    protocol: { bus: "SPI" },
+  };
+
+  it("throws UnsupportedBusError instead of emitting an I2C-only HAL seam", () => {
+    expect(() => generateEsp32Driver(spiJson)).toThrow(UnsupportedBusError);
+  });
+
+  it("names the target, the bus, and points at the still-working portable target", () => {
+    let caught: unknown;
+    try {
+      generateEsp32Driver(spiJson);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(UnsupportedBusError);
+    const message = (caught as Error).message;
+    expect(message).toMatch(/esp32/i);
+    expect(message).toMatch(/SPI/);
+    expect(message).toMatch(/portable/);
   });
 });
 

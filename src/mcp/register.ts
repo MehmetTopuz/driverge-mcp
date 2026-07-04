@@ -11,6 +11,7 @@ import {
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+  UnsupportedBusError,
   UnsupportedTargetError,
   generateDriver,
   lintDriver,
@@ -163,6 +164,7 @@ export function registerDrivergeTools(server: McpServer): void {
         artifact = generateDriver(entry.json, target as CodegenTarget);
       } catch (err) {
         if (err instanceof UnsupportedTargetError) return text(err.message, true);
+        if (err instanceof UnsupportedBusError) return text(err.message, true);
         throw err;
       }
 

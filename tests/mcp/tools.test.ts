@@ -116,6 +116,25 @@ describe("Driverge MCP surface", () => {
     ]);
   });
 
+  it("generate_driver refuses a SPI part on a native I2C-only target (esp32) cleanly (B1 regression pin)", async () => {
+    const spiRef = "ds_test_bme280_spi";
+    putDatasheet({
+      ref: spiRef,
+      pdfPath: "/x/bme280-spi.pdf",
+      json: { ...validJson, protocol: { ...validJson.protocol, bus: "SPI" } },
+    });
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: spiRef, target: "esp32" },
+    });
+    expect((result as ToolResult).isError).toBe(true);
+    expect(firstText(result)).toMatch(/SPI/);
+    expect(firstText(result)).toMatch(/portable/);
+    // No raw stack leak — same standard the server already holds for other rejections.
+    expect(firstText(result)).not.toMatch(/at Object\.|node_modules/);
+  });
+
   it("generate_driver rejects a not-yet-supported native target (arduino)", async () => {
     const client = await connectClient();
     const result = await client.callTool({

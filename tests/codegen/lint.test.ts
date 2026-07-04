@@ -83,6 +83,19 @@ describe("lintDriver", () => {
     expect(r.errors.join("\n")).toMatch(/OSRS_T_MASK/);
   });
 
+  it("ignores braces/parens inside string and char literals when checking balance (B2 regression pin)", () => {
+    const r = lintDriver(
+      withSource(
+        (c) =>
+          `${c}\nstatic const char *fmt = "{ (";\nstatic const char open_brace = '{';\n`,
+      ),
+      json,
+    );
+    expect(r.errors.filter((e) => /unbalanced/.test(e))).toEqual([]);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+  });
+
   it("rejects unbalanced braces", () => {
     const r = lintDriver(
       withSource((c) => `${c}\nint stray(void) {`),
