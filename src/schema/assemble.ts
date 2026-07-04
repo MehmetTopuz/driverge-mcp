@@ -5,6 +5,7 @@
 // host AI by ref. See wiki: json-schema-as-contract, mcp-tool-usage-flow.
 
 import { extractCommands, extractProtocol } from "../pdf/command.js";
+import { findGenericRegisterTable } from "../pdf/generic-register-table.js";
 import { detectInterfaceKind, detectSections } from "../pdf/interface-kind.js";
 import { detectManufacturer } from "../pdf/manufacturer.js";
 import { detectPart } from "../pdf/part.js";
@@ -19,11 +20,16 @@ function buildInterface(pages: PageContent[], kind: string): DeviceInterface {
     return { kind: "command_set", commands: extractCommands(pages) };
   }
   // register_map (and "unknown", treated register-first). Try the BME280/
-  // Microchip bit-table extractor, then fall back to the TI register-summary
-  // adapter for that vendor's format.
+  // Microchip bit-table extractor, then the TI register-summary adapter, then the
+  // role-based generic extractor (raises the deterministic floor for unseen vendor
+  // table shapes — see generic-register-table). Each runs only when the prior found
+  // nothing, so the specialized adapters (and their goldens) are never affected.
   let registers = findRegisterTable(pages)?.registers ?? [];
   if (registers.length === 0) {
     registers = findTiRegisterMap(pages)?.registers ?? [];
+  }
+  if (registers.length === 0) {
+    registers = findGenericRegisterTable(pages)?.registers ?? [];
   }
   // Only reclassify as a command set when nothing register-like was found.
   if (registers.length === 0 && kind === "unknown") {

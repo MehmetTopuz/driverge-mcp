@@ -113,18 +113,19 @@ describe("deriveExtraction", () => {
   });
 });
 
-// End-to-end over a real fixture whose table format Driverge can't yet parse: the
-// pipeline must DEFER (not hard-fail) and codegen must still emit a completable
-// skeleton. Skips on a fresh clone lacking the git-ignored PDF.
-const AEAT = fileURLToPath(
-  new URL("../fixtures/AEAT-8811-Q24_DS.pdf", import.meta.url),
+// End-to-end over a real fixture whose table format Driverge can't parse (an
+// abbreviated Infineon datasheet with no register-map table): the pipeline must
+// DEFER (not hard-fail) and codegen must still emit a completable skeleton. Skips
+// on a fresh clone lacking the git-ignored PDF.
+const DEFERRED = fileURLToPath(
+  new URL("../fixtures/infineon-tle5014sp16d-e0002-datasheet-en.pdf", import.meta.url),
 );
 
-describe.skipIf(!existsSync(AEAT))(
-  "graceful degradation — real deferred fixture (AEAT-8811)",
+describe.skipIf(!existsSync(DEFERRED))(
+  "graceful degradation — real deferred fixture (TLE5014)",
   () => {
     it("defers instead of hard-failing and generates a completable skeleton", async () => {
-      const json = assembleDatasheet(await analyzePdfFile(AEAT));
+      const json = assembleDatasheet(await analyzePdfFile(DEFERRED));
       expect(json.extraction?.status).toBe("deferred");
       expect(json.validation.valid).toBe(true);
       expect(json.validation.errors).toEqual([]);
