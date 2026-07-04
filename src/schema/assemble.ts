@@ -9,6 +9,7 @@ import { findGenericRegisterTable } from "../pdf/generic-register-table.js";
 import { detectInterfaceKind, detectSections } from "../pdf/interface-kind.js";
 import { detectManufacturer } from "../pdf/manufacturer.js";
 import { detectPart } from "../pdf/part.js";
+import { extractProseCommands } from "../pdf/prose-commands.js";
 import { findRegisterTable } from "../pdf/register-table.js";
 import { findTiRegisterMap } from "../pdf/ti-register-map.js";
 import type { InterfaceKind, PageContent, PdfAnalysis } from "../pdf/types.js";
@@ -17,7 +18,9 @@ import { validateDatasheet } from "./validate.js";
 
 function buildInterface(pages: PageContent[], kind: string): DeviceInterface {
   if (kind === "command_set") {
-    return { kind: "command_set", commands: extractCommands(pages) };
+    let commands = extractCommands(pages);
+    if (commands.length === 0) commands = extractProseCommands(pages);
+    return { kind: "command_set", commands };
   }
   // register_map (and "unknown", treated register-first). Try the BME280/
   // Microchip bit-table extractor, then the TI register-summary adapter, then the

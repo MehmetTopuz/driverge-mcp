@@ -1,0 +1,46 @@
+{
+  "metadata": {
+    "part": "DHT20",
+    "manufacturer": "Aosong",
+    "manufacturerConfidence": 1,
+    "pdfType": "text_based",
+    "pageCount": 13
+  },
+  "protocol": {
+    "bus": "I2C",
+    "addresses": [
+      "0x38"
+    ]
+  },
+  "interface": {
+    "kind": "command_set",
+    "commands": [
+      {
+        "name": "status",
+        "code": "0x71"
+      },
+      {
+        "name": "trigger_measurement",
+        "code": "0xAC",
+        "params": [
+          "0x33",
+          "0x00"
+        ]
+      }
+    ]
+  },
+  "extraction": {
+    "status": "complete",
+    "detectedPages": []
+  },
+  "validation": {
+    "valid": true,
+    "errors": [],
+    "warnings": [
+      "status: response length not declared",
+      "status: CRC parameters missing",
+      "trigger_measurement: response length not declared",
+      "trigger_measurement: CRC parameters missing"
+    ]
+  }
+}

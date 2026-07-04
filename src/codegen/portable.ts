@@ -293,7 +293,12 @@ function commandDriver(
       const macroName = `${prefix}_CMD_${macro(c.name)}`;
       if (seen.has(macroName)) continue;
       seen.add(macroName);
-      header.push(`#define ${macroName} ${c.code.toUpperCase().replace("0X", "0x")}`);
+      const line = `#define ${macroName} ${c.code.toUpperCase().replace("0X", "0x")}`;
+      header.push(
+        c.params && c.params.length > 0
+          ? `${line}  /* params: ${c.params.join(", ")} */`
+          : line,
+      );
     }
   }
 

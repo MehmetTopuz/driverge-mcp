@@ -97,6 +97,48 @@ describe("generatePortableDriver — command_set (SHT3x golden)", () => {
   });
 });
 
+// Phase 4: prose-extracted commands (e.g. DHT20 trigger_measurement 0xAC) can
+// carry a `params` byte sequence the datasheet spells out in a follow-up
+// sentence ("first byte is 0x33, ... second byte is 0x00"). The generated
+// #define must surface those bytes as a same-line comment so the host AI (and
+// a human reviewer) sees them without having to re-open the datasheet.
+const paramsDatasheet = (): DatasheetJson =>
+  ({
+    metadata: {
+      part: "DHT20",
+      manufacturer: "Aosong",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "I2C", addresses: ["0x38"] },
+    interface: {
+      kind: "command_set",
+      commands: [
+        { name: "trigger_measurement", code: "0xAC", params: ["0x33", "0x00"] },
+        { name: "status", code: "0x71" },
+      ],
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  }) as unknown as DatasheetJson;
+
+describe("generatePortableDriver — command_set params comment (DHT20-shaped)", () => {
+  it("emits the params byte sequence as a same-line comment on the command #define", () => {
+    const art = generatePortableDriver(paramsDatasheet());
+    const header = art.files.find((f) => f.path === "dht20.h")!.content;
+    const line = header
+      .split("\n")
+      .find((l) => l.includes("DHT20_CMD_TRIGGER_MEASUREMENT"));
+    expect(line).toBeDefined();
+    expect(line).toMatch(
+      /^#define DHT20_CMD_TRIGGER_MEASUREMENT 0xAC\s+\/\* params: 0x33, 0x00 \*\/$/,
+    );
+    // The param-less command on the same driver must NOT gain a stray comment.
+    const statusLine = header.split("\n").find((l) => l.includes("DHT20_CMD_STATUS"));
+    expect(statusLine).toBe("#define DHT20_CMD_STATUS 0x71");
+  });
+});
+
 describe("generatePortableDriver — 16-bit register width", () => {
   const header = generatePortableDriver(wide16Datasheet()).files[0].content;
 
