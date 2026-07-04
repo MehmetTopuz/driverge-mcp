@@ -45,9 +45,9 @@ export type PageMap = Record<string, number[]>;
 /** One bit field within a register, positioned by absolute bit index. */
 export interface BitField {
   name: string;
-  /** Most-significant bit index within the register (0-7). */
+  /** Most-significant bit index within the register (0 .. width-1). */
   msb: number;
-  /** Least-significant bit index within the register (0-7). */
+  /** Least-significant bit index within the register (0 .. width-1). */
   lsb: number;
 }
 
@@ -58,7 +58,14 @@ export interface Register {
   address: string;
   /** Verbatim reset/default cell, e.g. "0x00", "0x60", "individual". */
   reset: string;
+  /** Register width in bits (8/16/32); absent ⇒ 8. Bounds bit-field indices/reset. */
+  width?: number;
   bitFields: BitField[];
+}
+
+/** Register width in bits, defaulting to 8 when unspecified. */
+export function registerWidth(r: Register): number {
+  return r.width ?? 8;
 }
 
 /** The register map extracted from one table. */

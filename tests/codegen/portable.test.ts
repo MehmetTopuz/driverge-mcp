@@ -1,6 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { generatePortableDriver } from "../../src/codegen/portable";
+import type { DatasheetJson } from "../../src/schema/types";
 import { commandDatasheet, registerDatasheet } from "./helpers";
+
+const wide16Datasheet = (): DatasheetJson =>
+  ({
+    metadata: {
+      part: "WIDE16",
+      manufacturer: "Test Vendor",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "SPI" },
+    interface: {
+      kind: "register_map",
+      registers: [
+        {
+          name: "ctrl",
+          address: "0x00",
+          reset: "0x0000",
+          width: 16,
+          bitFields: [
+            { name: "gain", msb: 11, lsb: 8 },
+            { name: "en", msb: 0, lsb: 0 },
+          ],
+        },
+      ],
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  }) as unknown as DatasheetJson;
 
 describe("generatePortableDriver — register_map (BME280 golden)", () => {
   const json = registerDatasheet("bme280.golden.json", "BME280");
@@ -65,5 +94,19 @@ describe("generatePortableDriver — command_set (SHT3x golden)", () => {
     expect(source).toContain("hal_i2c_write(dev->i2c_addr, msb, &lsb, 1);");
     expect(source).toContain("uint8_t sht3x_crc8(const uint8_t *data, uint16_t len)");
     expect(art.fill_in_brief.crc_todo).toMatch(/CRC-8/);
+  });
+});
+
+describe("generatePortableDriver — 16-bit register width", () => {
+  const header = generatePortableDriver(wide16Datasheet()).files[0].content;
+
+  it("emits width-correct 16-bit bit-field masks (4 hex digits)", () => {
+    expect(header).toContain("#define WIDE16_CTRL_GAIN_MASK  0x0F00");
+    expect(header).toContain("#define WIDE16_CTRL_GAIN_SHIFT 8");
+    expect(header).toContain("#define WIDE16_CTRL_EN_MASK  0x0001");
+  });
+
+  it("annotates the register width", () => {
+    expect(header).toMatch(/16-bit register/);
   });
 });

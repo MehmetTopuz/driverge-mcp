@@ -5,9 +5,9 @@
 // spot needing host-AI reasoning. Output is reproducible: no timestamps, stable
 // ordering. The host AI fills the brief and re-validates via validate_driver.
 
-import type { Register } from "../pdf/types.js";
+import { registerWidth, type Register } from "../pdf/types.js";
 import type { Command, DatasheetJson } from "../schema/types.js";
-import { HEX_ONLY, fieldMask, hex2, macro, slug } from "./ident.js";
+import { HEX_ONLY, fieldMask, macro, maskHex, slug } from "./ident.js";
 import type { DriverArtifact, FillInBrief, GeneratedFile } from "./types.js";
 
 const AUTOGEN = (part: string, mfr: string, busLine: string): string =>
@@ -76,10 +76,12 @@ function bitFieldMacros(prefix: string, registers: Register[]): string[] {
   const lines: string[] = [];
   for (const r of registers) {
     if (r.bitFields.length === 0) continue;
-    lines.push("", `/* ${r.name} bit fields. */`);
+    const width = registerWidth(r);
+    const widthNote = width > 8 ? ` (${width}-bit register)` : "";
+    lines.push("", `/* ${r.name} bit fields${widthNote}. */`);
     for (const f of r.bitFields) {
       const base = `${prefix}_${macro(r.name)}_${macro(f.name)}`;
-      lines.push(`#define ${base}_MASK  ${hex2(fieldMask(f.msb, f.lsb))}`);
+      lines.push(`#define ${base}_MASK  ${maskHex(fieldMask(f.msb, f.lsb, width), width)}`);
       lines.push(`#define ${base}_SHIFT ${f.lsb}`);
     }
   }
@@ -135,6 +137,15 @@ function registerDriver(
       ? regLines
       : registerMapTodo(prefix, json.extraction?.detectedPages ?? [])),
   );
+  if (registers.some((r) => registerWidth(r) > 8)) {
+    header.push(
+      "",
+      "/* NOTE: some registers here are wider than 8 bits (see the per-register",
+      " * annotations). Bit-field masks are register-width correct; multi-byte access",
+      " * framing (byte order / transfer size) is device-specific and belongs on the",
+      " * hal_* seam. */",
+    );
+  }
   const bits = bitFieldMacros(prefix, registers);
   if (bits.length > 0) header.push("", "/* Bit-field mask/shift accessors. */", ...bits);
 

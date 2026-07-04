@@ -131,3 +131,39 @@ describe("lintDriver — completed deferred driver", () => {
     expect(r.valid).toBe(true);
   });
 });
+
+describe("lintDriver — 16-bit register masks", () => {
+  const json16: DatasheetJson = {
+    metadata: {
+      part: "WIDE16",
+      manufacturer: "Test Vendor",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "SPI" },
+    interface: {
+      kind: "register_map",
+      registers: [
+        {
+          name: "ctrl",
+          address: "0x00",
+          reset: "0x0000",
+          width: 16,
+          bitFields: [{ name: "gain", msb: 11, lsb: 8 }],
+        },
+      ] as never,
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  };
+
+  it("accepts a width-correct 16-bit mask (not falsely flagged against 8-bit geometry)", () => {
+    const files = generatePortableDriver(json16).files.map((f) => ({
+      path: f.path,
+      content: f.content.replace(/TODO\(driverge\)/g, "done"),
+    }));
+    const r = lintDriver(files, json16);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+  });
+});

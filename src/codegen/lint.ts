@@ -4,9 +4,9 @@
 // on the thin-HAL seam, didn't hallucinate registers/commands, and didn't corrupt
 // the deterministic bit-field masks. Pure/text-based — no compiler needed.
 
-import type { Register } from "../pdf/types.js";
+import { registerWidth, type Register } from "../pdf/types.js";
 import type { Command, DatasheetJson, ValidationResult } from "../schema/types.js";
-import { fieldMask, hex2, macro, prefixOf } from "./ident.js";
+import { fieldMask, macro, maskHex, prefixOf } from "./ident.js";
 import type { GeneratedFile } from "./types.js";
 
 // Vendor peripheral APIs that must NEVER appear in a portable/thin-HAL driver —
@@ -100,14 +100,15 @@ function checkMasks(
   errors: string[],
 ): void {
   for (const r of registers) {
+    const width = registerWidth(r);
     for (const f of r.bitFields) {
       const base = `${prefix}_${macro(r.name)}_${macro(f.name)}`;
       const maskDef = new RegExp(`#define\\s+${base}_MASK\\s+(0x[0-9a-fA-F]+)`).exec(text);
       if (maskDef) {
         const got = Number.parseInt(maskDef[1], 16);
-        const want = fieldMask(f.msb, f.lsb);
+        const want = fieldMask(f.msb, f.lsb, width);
         if (got !== want) {
-          errors.push(`${base}_MASK is ${maskDef[1]} but ${r.name}.${f.name} [${f.msb}:${f.lsb}] implies ${hex2(want)}`);
+          errors.push(`${base}_MASK is ${maskDef[1]} but ${r.name}.${f.name} [${f.msb}:${f.lsb}] implies ${maskHex(want, width)}`);
         }
       }
       const shiftDef = new RegExp(`#define\\s+${base}_SHIFT\\s+(\\d+)`).exec(text);

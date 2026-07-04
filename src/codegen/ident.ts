@@ -20,14 +20,24 @@ export function macro(s: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-/** 8-bit mask for a [msb:lsb] field. */
-export function fieldMask(msb: number, lsb: number): number {
-  const width = msb - lsb + 1;
-  return (((1 << width) - 1) << lsb) & 0xff;
+/**
+ * Mask for a [msb:lsb] field within a `regWidth`-bit register. Computed
+ * arithmetically so it is correct up to 32 bits (no 32-bit shift overflow); for
+ * valid 8-bit fields it equals the historical `& 0xff` result (e.g. 7:5 → 0xE0).
+ */
+export function fieldMask(msb: number, lsb: number, regWidth = 8): number {
+  const bits = msb - lsb + 1;
+  const mask = (2 ** bits - 1) * 2 ** lsb;
+  return mask % 2 ** regWidth;
 }
 
 export function hex2(n: number): string {
   return `0x${n.toString(16).toUpperCase().padStart(2, "0")}`;
+}
+
+/** Hex literal padded to a register width's digit count (8→2, 16→4, 32→8). */
+export function maskHex(n: number, regWidth = 8): string {
+  return `0x${n.toString(16).toUpperCase().padStart(regWidth / 4, "0")}`;
 }
 
 /** Macro prefix for a part, e.g. "BME280". */

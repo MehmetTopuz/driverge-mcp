@@ -81,6 +81,10 @@
         "name": { "type": "string" },
         "address": { "type": "string" },
         "reset": { "type": "string" },
+        "width": {
+          "description": "Register width in bits; absent means 8. Bounds bit-field indices and the reset value (enforced by the L5 validator).",
+          "enum": [8, 16, 32]
+        },
         "bitFields": { "type": "array", "items": { "$ref": "#/definitions/bitField" } }
       }
     },
@@ -90,8 +94,8 @@
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string" },
-        "msb": { "type": "integer", "minimum": 0, "maximum": 7 },
-        "lsb": { "type": "integer", "minimum": 0, "maximum": 7 }
+        "msb": { "type": "integer", "minimum": 0, "maximum": 31 },
+        "lsb": { "type": "integer", "minimum": 0, "maximum": 31 }
       }
     },
     "command": {

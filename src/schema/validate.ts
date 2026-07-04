@@ -2,7 +2,7 @@
 // gate malformed/incomplete JSON before it reaches the host AI (see wiki:
 // validate-before-sending-to-claude). Errors fail validation; warnings do not.
 
-import type { Register } from "../pdf/types.js";
+import { registerWidth, type Register } from "../pdf/types.js";
 import type {
   Command,
   DatasheetJson,
@@ -11,6 +11,7 @@ import type {
 } from "./types.js";
 
 const HEX_ONLY = /^0x[0-9a-f]+$/i;
+const VALID_WIDTHS = new Set([8, 16, 32]);
 
 const detectedOn = (pages: number[]): string =>
   pages.length > 0 ? ` (page(s) ${pages.join(", ")})` : "";
@@ -67,9 +68,19 @@ function validateRegisters(
       addressCount.set(r.address, (addressCount.get(r.address) ?? 0) + 1);
     }
 
-    const occupied = new Array<boolean>(8).fill(false);
+    if (r.width !== undefined && !VALID_WIDTHS.has(r.width)) {
+      errors.push(`${r.name}: invalid register width ${r.width} (expected 8, 16, or 32)`);
+    }
+    const width = registerWidth(r);
+
+    const occupied = new Array<boolean>(width).fill(false);
     for (const field of r.bitFields) {
-      if (field.msb < 0 || field.msb > 7 || field.lsb < 0 || field.lsb > 7) {
+      if (
+        field.msb < 0 ||
+        field.msb > width - 1 ||
+        field.lsb < 0 ||
+        field.lsb > width - 1
+      ) {
         errors.push(
           `${r.name}.${field.name}: bit index out of range (${field.msb}:${field.lsb})`,
         );
@@ -89,8 +100,8 @@ function validateRegisters(
       }
     }
 
-    if (HEX_ONLY.test(r.reset) && Number.parseInt(r.reset, 16) > 0xff) {
-      errors.push(`${r.name}: reset ${r.reset} exceeds the 8-bit register width`);
+    if (HEX_ONLY.test(r.reset) && Number.parseInt(r.reset, 16) > 2 ** width - 1) {
+      errors.push(`${r.name}: reset ${r.reset} exceeds the ${width}-bit register width`);
     }
   }
 

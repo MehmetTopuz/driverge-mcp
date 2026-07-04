@@ -113,6 +113,41 @@ describe("validateDatasheet — command_set", () => {
   });
 });
 
+describe("validateDatasheet — register width (8/16/32-bit)", () => {
+  const wreg = (
+    width: number,
+    bitFields: { name: string; msb: number; lsb: number }[] = [],
+    reset = "0x00",
+  ) => ({ name: "cfg", address: "0x00", reset, bitFields, width });
+
+  it("accepts a 16-bit register with a [15:8] bit field", () => {
+    const r = validateDatasheet(registerDs([wreg(16, [bf("hi", 15, 8)])]));
+    expect(r.valid).toBe(true);
+    expect(r.errors).toEqual([]);
+  });
+
+  it("rejects a bit index beyond the register width (msb 16 on a 16-bit register)", () => {
+    const r = validateDatasheet(registerDs([wreg(16, [bf("x", 16, 8)])]));
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/out of range/i);
+  });
+
+  it("accepts reset 0x1FF on a 16-bit register but rejects it on the default 8-bit", () => {
+    expect(validateDatasheet(registerDs([wreg(16, [], "0x1FF")])).valid).toBe(true);
+    expect(validateDatasheet(registerDs([reg("c", "0x00", "0x1FF")])).valid).toBe(false);
+  });
+
+  it("rejects a reset that exceeds the 16-bit register width (0x1FFFF)", () => {
+    const r = validateDatasheet(registerDs([wreg(16, [], "0x1FFFF")]));
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/16-bit/);
+  });
+
+  it("rejects an invalid register width (12)", () => {
+    expect(validateDatasheet(registerDs([wreg(12, [])])).valid).toBe(false);
+  });
+});
+
 describe("validateDatasheet — graceful degradation (extraction status)", () => {
   const withExtraction = (
     iface: object,
