@@ -14,6 +14,14 @@ export interface CacheEntry {
 
 const store = new Map<string, CacheEntry>();
 
+/**
+ * Bounded LRU cap — a long-lived server process must not grow this cache
+ * without bound under repeated analyze_datasheet calls (see wiki: hardening).
+ * Map iteration order is insertion order, so the "oldest" entry is always the
+ * first key; recency is refreshed by delete+re-set on both write and read.
+ */
+export const MAX_CACHE_ENTRIES = 32;
+
 /** Idempotent ref for a file: same path + mtime → same ref → cache hit. */
 export function computeRef(pdfPath: string, mtimeMs: number): string {
   const hash = createHash("sha1")
@@ -23,11 +31,24 @@ export function computeRef(pdfPath: string, mtimeMs: number): string {
 }
 
 export function putDatasheet(entry: CacheEntry): void {
+  // Delete-then-set moves an already-present ref to the recent end too, so a
+  // re-analyze doesn't leave it stuck near the eviction edge.
+  store.delete(entry.ref);
   store.set(entry.ref, entry);
+  while (store.size > MAX_CACHE_ENTRIES) {
+    const oldest = store.keys().next().value;
+    if (oldest === undefined) break;
+    store.delete(oldest);
+  }
 }
 
 export function getDatasheet(ref: string): CacheEntry | undefined {
-  return store.get(ref);
+  const entry = store.get(ref);
+  if (!entry) return undefined;
+  // Refresh recency on read so a hot entry survives future evictions.
+  store.delete(ref);
+  store.set(ref, entry);
+  return entry;
 }
 
 /** Test seam — reset cache between cases. */

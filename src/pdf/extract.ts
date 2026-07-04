@@ -11,6 +11,13 @@ const IMAGE_OPS: ReadonlySet<number> = new Set([
 ]);
 
 export async function extractPages(data: Uint8Array): Promise<PageContent[]> {
+  // S3 hardening note: earlier pdfjs-dist versions accepted `isEvalSupported`
+  // to stop it from `new Function(...)`-evaluating embedded Type3/PostScript
+  // glyph code on untrusted PDFs (CVE-2024-4367). This install (pdfjs-dist
+  // 6.1.200) removed both the option and the eval code path upstream — grep
+  // of node_modules/pdfjs-dist finds no `isEvalSupported` or `new Function(`
+  // left in the bundle — so there is nothing left here to opt out of. Flagged
+  // to the orchestrator; revisit if a future pdfjs-dist bump reintroduces it.
   const task = getDocument({ data });
   const pdf = await task.promise;
   try {

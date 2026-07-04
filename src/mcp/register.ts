@@ -2,8 +2,8 @@
 // server instance. Kept out of server.ts so the wiring is unit-testable over an
 // in-memory transport. Contract: wiki mcp-tool-usage-flow.
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   McpServer,
@@ -25,6 +25,45 @@ import { buildSummary } from "./summary.js";
 
 const TARGET = z.enum(["portable", "stm32", "esp32", "arduino"]);
 const FILES = z.array(z.object({ path: z.string(), content: z.string() }));
+
+// Structural guard for validate_datasheet's `json` arg (S5, see wiki:
+// validate-before-sending-to-claude): a minimal zod parse covering exactly what
+// validateDatasheet reads, so a malformed/hand-typed blob fails with a clean
+// message instead of a raw TypeError from deep inside the validator. Loose on
+// fields validateDatasheet doesn't touch — this is a guard, not a schema mirror.
+const BIT_FIELD_SCHEMA = z.object({
+  name: z.string(),
+  msb: z.number(),
+  lsb: z.number(),
+});
+const REGISTER_SCHEMA = z.object({
+  name: z.string(),
+  address: z.string(),
+  reset: z.string(),
+  width: z.number().optional(),
+  bitFields: z.array(BIT_FIELD_SCHEMA),
+});
+const COMMAND_SCHEMA = z.object({
+  name: z.string(),
+  code: z.string(),
+  responseWords: z.number().optional(),
+  crc: z.object({ poly: z.string(), init: z.string(), width: z.number() }).optional(),
+});
+const INTERFACE_SCHEMA = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("register_map"), registers: z.array(REGISTER_SCHEMA) }),
+  z.object({ kind: z.literal("command_set"), commands: z.array(COMMAND_SCHEMA) }),
+]);
+const DATASHEET_JSON_GUARD = z.object({
+  metadata: z.looseObject({ part: z.string() }),
+  protocol: z.looseObject({ bus: z.string() }),
+  interface: INTERFACE_SCHEMA,
+  extraction: z
+    .object({
+      status: z.enum(["complete", "partial", "deferred", "none"]),
+      detectedPages: z.array(z.number()),
+    })
+    .optional(),
+}).loose();
 
 type TextResult = {
   content: { type: "text"; text: string }[];
@@ -64,10 +103,15 @@ export function registerDrivergeTools(server: McpServer): void {
       },
     },
     async ({ pdf_path }) => {
-      if (!existsSync(pdf_path)) {
+      // Single stat call (not existsSync + statSync) to close the TOCTOU gap
+      // where the file could vanish/change between the check and the read (S4).
+      let mtimeMs: number;
+      try {
+        mtimeMs = statSync(pdf_path).mtimeMs;
+      } catch {
         return text(`file not found: ${pdf_path}`, true);
       }
-      const ref = computeRef(pdf_path, statSync(pdf_path).mtimeMs);
+      const ref = computeRef(pdf_path, mtimeMs);
       const cached = getDatasheet(ref);
       if (cached) return text(buildSummary(cached));
 
@@ -123,8 +167,22 @@ export function registerDrivergeTools(server: McpServer): void {
       }
 
       if (out_dir) {
-        mkdirSync(out_dir, { recursive: true });
-        for (const f of artifact.files) writeFileSync(join(out_dir, f.path), f.content);
+        // S1: confine writes under DRIVERGE_OUT_ROOT (default cwd), read at call
+        // time so tests can scope it per-case. relative() + isAbsolute() catches
+        // both "../escape" traversal and an absolute path on another drive; no
+        // directory is created before this check passes.
+        const root = process.env.DRIVERGE_OUT_ROOT ?? process.cwd();
+        const resolvedRoot = resolve(root);
+        const resolvedOut = resolve(resolvedRoot, out_dir);
+        const rel = relative(resolvedRoot, resolvedOut);
+        if (rel.startsWith("..") || isAbsolute(rel)) {
+          return text(
+            `out_dir "${out_dir}" escapes the allowed root "${resolvedRoot}" (set DRIVERGE_OUT_ROOT to change it)`,
+            true,
+          );
+        }
+        mkdirSync(resolvedOut, { recursive: true });
+        for (const f of artifact.files) writeFileSync(join(resolvedOut, f.path), f.content);
       }
       return text(artifact);
     },
@@ -167,7 +225,19 @@ export function registerDrivergeTools(server: McpServer): void {
         if (!entry) return text(`unknown ref "${ref}"`, true);
         return text(validateDatasheet(entry.json));
       }
-      if (json) return text(validateDatasheet(json as unknown as DatasheetJson));
+      if (json) {
+        // S5: structural parse before validateDatasheet ever dereferences the
+        // shape — a hand-typed/malformed blob must fail cleanly, not throw a
+        // raw TypeError from deep inside the validator.
+        const parsed = DATASHEET_JSON_GUARD.safeParse(json);
+        if (!parsed.success) {
+          const issues = parsed.error.issues
+            .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+            .join("; ");
+          return text(`invalid datasheet JSON — ${issues}`, true);
+        }
+        return text(validateDatasheet(parsed.data as unknown as DatasheetJson));
+      }
       return text("provide either `ref` or `json`", true);
     },
   );
