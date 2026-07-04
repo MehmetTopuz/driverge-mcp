@@ -60,6 +60,16 @@
         "errors": { "type": "array", "items": { "type": "string" } },
         "warnings": { "type": "array", "items": { "type": "string" } }
       }
+    },
+    "extraction": {
+      "type": "object",
+      "description": "How complete the deterministic extraction is. Optional (absent on legacy JSON, treated as `none`).",
+      "required": ["status", "detectedPages"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["complete", "partial", "deferred", "none"] },
+        "detectedPages": { "type": "array", "items": { "type": "integer", "minimum": 1 } }
+      }
     }
   },
   "definitions": {

@@ -32,6 +32,14 @@ export function buildSummary(entry: CacheEntry): Record<string, unknown> {
     interface: { kind: json.interface.kind },
     protocol_summary: protocolSummary,
     counts,
+    ...(json.extraction
+      ? {
+          extraction: {
+            status: json.extraction.status,
+            detected_pages: json.extraction.detectedPages,
+          },
+        }
+      : {}),
     validation: {
       passed: json.validation.valid,
       warnings: json.validation.warnings,

@@ -112,3 +112,57 @@ describe("validateDatasheet — command_set", () => {
     expect(r.valid).toBe(false);
   });
 });
+
+describe("validateDatasheet — graceful degradation (extraction status)", () => {
+  const withExtraction = (
+    iface: object,
+    extraction: { status: string; detectedPages: number[] },
+  ) => ({ ...base, interface: iface, extraction }) as never;
+
+  it("treats an empty register map as a deferral (warning, not error) when a section was detected", () => {
+    const r = validateDatasheet(
+      withExtraction(
+        { kind: "register_map", registers: [] },
+        { status: "deferred", detectedPages: [12] },
+      ),
+    );
+    expect(r.valid).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(r.warnings.join(" ")).toMatch(/deferred|not auto-extracted|host AI|complete it/i);
+  });
+
+  it("keeps an empty register map with no signal a hard error", () => {
+    const r = validateDatasheet(
+      withExtraction(
+        { kind: "register_map", registers: [] },
+        { status: "none", detectedPages: [] },
+      ),
+    );
+    expect(r.valid).toBe(false);
+  });
+
+  it("treats an empty command set deferral as a warning, not an error", () => {
+    const r = validateDatasheet(
+      withExtraction(
+        { kind: "command_set", commands: [] },
+        { status: "deferred", detectedPages: [4] },
+      ),
+    );
+    expect(r.valid).toBe(true);
+    expect(r.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("warns (does not fail) on a partial address-only register map", () => {
+    const r = validateDatasheet(
+      withExtraction(
+        {
+          kind: "register_map",
+          registers: [{ name: "cfg", address: "0x00", reset: "", bitFields: [] }],
+        },
+        { status: "partial", detectedPages: [33] },
+      ),
+    );
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join(" ")).toMatch(/partial|bit field|without/i);
+  });
+});

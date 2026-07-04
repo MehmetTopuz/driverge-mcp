@@ -11,6 +11,26 @@ const COMMAND_KEYWORD =
   /command\s+word|commands?\s+(set|table|list)|list\s+of\s+commands/i;
 const CRC_KEYWORD = /crc[-\s]?\d|clock\s+stretch/i;
 
+/**
+ * Which pages carry a register-map / command section heading. Used by the
+ * graceful-degradation path (schema/assemble) to tell a *deferral* (a section was
+ * detected but not auto-extracted → hand to the host AI) from a genuine parse
+ * failure, and to point the host AI at the right pages. Reuses the same keyword
+ * signals as the kind classifier.
+ */
+export function detectSections(pages: PageContent[]): {
+  registerPages: number[];
+  commandPages: number[];
+} {
+  const registerPages: number[] = [];
+  const commandPages: number[] = [];
+  for (const p of pages) {
+    if (REGISTER_KEYWORD.test(p.text)) registerPages.push(p.index);
+    if (COMMAND_KEYWORD.test(p.text)) commandPages.push(p.index);
+  }
+  return { registerPages, commandPages };
+}
+
 export function detectInterfaceKind(
   pages: PageContent[],
 ): InterfaceKindDetection {

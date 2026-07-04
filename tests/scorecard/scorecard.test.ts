@@ -46,6 +46,7 @@ function row(file: string, j: DatasheetJson): string {
     String(regs),
     String(bits),
     String(cmds),
+    j.extraction?.status ?? "n/a",
     j.validation.valid ? "yes" : "NO",
   ];
   return `| ${cols.join(" | ")} |`;
@@ -56,8 +57,8 @@ describe.skipIf(present.length === 0)("cross-vendor coverage scorecard", () => {
     "matches the committed scorecard snapshot",
     async () => {
       const head =
-        "| fixture | part | manufacturer | kind | bus | regs | bitfields | cmds | valid |\n" +
-        "|---|---|---|---|---|---|---|---|---|";
+        "| fixture | part | manufacturer | kind | bus | regs | bitfields | cmds | extraction | valid |\n" +
+        "|---|---|---|---|---|---|---|---|---|---|";
       const rows: string[] = [];
       for (const f of present) {
         const j = assembleDatasheet(await analyzePdfFile(fixturePath(f)));

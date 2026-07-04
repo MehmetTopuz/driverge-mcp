@@ -53,10 +53,32 @@ export interface ValidationResult {
   warnings: string[];
 }
 
+/**
+ * How complete the deterministic extraction of the interface is (see wiki:
+ * graceful-degradation). Drives whether an empty/incomplete map is a hard error
+ * or a host-AI-completable deferral.
+ *
+ * - `complete`  — registers with bit-field detail, or a clean command list.
+ * - `partial`   — ≥1 register but known-incomplete (e.g. an address-only list
+ *                 with no bit fields).
+ * - `deferred`  — a register/command section was DETECTED but not auto-extracted;
+ *                 the host AI completes it from the datasheet resource.
+ * - `none`      — no interface signal at all; a genuine parse failure.
+ */
+export type ExtractionStatus = "complete" | "partial" | "deferred" | "none";
+
+export interface Extraction {
+  status: ExtractionStatus;
+  /** 1-based pages where the register-map / command section was detected. */
+  detectedPages: number[];
+}
+
 /** The full parsed datasheet handed (by ref) to the host AI. */
 export interface DatasheetJson {
   metadata: DatasheetMetadata;
   protocol: Protocol;
   interface: DeviceInterface;
+  /** Extraction completeness; absent on legacy JSON (treated as `none`). */
+  extraction?: Extraction;
   validation: ValidationResult;
 }

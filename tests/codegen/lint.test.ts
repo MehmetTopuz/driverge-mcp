@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generatePortableDriver } from "../../src/codegen/portable";
 import { lintDriver } from "../../src/codegen/lint";
 import type { GeneratedFile } from "../../src/codegen/types";
+import type { DatasheetJson } from "../../src/schema/types";
 import { registerDatasheet } from "./helpers";
 
 const json = registerDatasheet("bme280.golden.json", "BME280");
@@ -89,5 +90,44 @@ describe("lintDriver", () => {
     );
     expect(r.valid).toBe(false);
     expect(r.errors.join("\n")).toMatch(/braces/);
+  });
+});
+
+describe("lintDriver — completed deferred driver", () => {
+  // A deferred datasheet has no registers in its JSON; the host AI adds them while
+  // completing the skeleton. Lint must not flag those host-added registers as
+  // hallucinated (they are defined + used within the files it checks).
+  const deferred: DatasheetJson = {
+    metadata: {
+      part: "AEAT8811",
+      manufacturer: "Broadcom",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 40,
+    },
+    protocol: { bus: "SPI" },
+    interface: { kind: "register_map", registers: [] },
+    extraction: { status: "deferred", detectedPages: [23] },
+    validation: { valid: true, errors: [], warnings: [] },
+  };
+
+  it("passes when the host AI adds registers absent from the (deferred) JSON", () => {
+    const files = generatePortableDriver(deferred).files.map((f) => {
+      let c = f.content.replace(/TODO\(driverge\)/g, "done");
+      if (f.path.endsWith(".h")) c += "\n#define AEAT8811_REG_STATUS 0x01\n";
+      if (f.path.endsWith(".c")) {
+        c +=
+          "\nint aeat8811_status(aeat8811_t *dev, uint8_t *v) {\n" +
+          "    uint8_t r = AEAT8811_REG_STATUS;\n" +
+          "    (void)dev;\n" +
+          "    hal_spi_write(&r, 1);\n" +
+          "    hal_spi_read(v, 1);\n" +
+          "    return 0;\n}\n";
+      }
+      return { path: f.path, content: c };
+    });
+    const r = lintDriver(files, deferred);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
   });
 });

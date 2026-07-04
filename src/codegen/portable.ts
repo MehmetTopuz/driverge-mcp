@@ -43,6 +43,35 @@ function registerConstants(prefix: string, registers: Register[]): string[] {
   return lines;
 }
 
+/** Where the host AI must enumerate a register map that Driverge couldn't extract. */
+function registerMapTodo(prefix: string, pages: number[]): string[] {
+  const where = pages.length
+    ? ` (register section detected on page(s) ${pages.join(", ")})`
+    : "";
+  return [
+    "/* Register map. */",
+    "/* TODO(driverge): Driverge could not auto-extract this device's register map",
+    ` * from the datasheet${where}. Enumerate the registers from the datasheet (read`,
+    " * the driverge://datasheet resource) and add one line per register:",
+    ` *     #define ${prefix}_REG_<NAME> 0x..`,
+    ` * plus ${prefix}_<REG>_<FIELD>_MASK / _SHIFT macros for any bit fields. */`,
+  ];
+}
+
+/** Where the host AI must enumerate a command set that Driverge couldn't extract. */
+function commandSetTodo(prefix: string, pages: number[]): string[] {
+  const where = pages.length
+    ? ` (command section detected on page(s) ${pages.join(", ")})`
+    : "";
+  return [
+    "/* Command codes. */",
+    "/* TODO(driverge): Driverge could not auto-extract this device's command set",
+    ` * from the datasheet${where}. Enumerate the commands from the datasheet (read`,
+    " * the driverge://datasheet resource) and add one line per command:",
+    ` *     #define ${prefix}_CMD_<NAME> 0x.. */`,
+  ];
+}
+
 function bitFieldMacros(prefix: string, registers: Register[]): string[] {
   const lines: string[] = [];
   for (const r of registers) {
@@ -99,7 +128,13 @@ function registerDriver(
     }
   }
 
-  header.push(...registerConstants(prefix, registers));
+  const regLines = registerConstants(prefix, registers);
+  const hasRegs = regLines.some((l) => l.startsWith("#define"));
+  header.push(
+    ...(hasRegs
+      ? regLines
+      : registerMapTodo(prefix, json.extraction?.detectedPages ?? [])),
+  );
   const bits = bitFieldMacros(prefix, registers);
   if (bits.length > 0) header.push("", "/* Bit-field mask/shift accessors. */", ...bits);
 
@@ -174,9 +209,13 @@ function registerDriver(
     "",
   ];
 
+  const brief = registerBrief(json);
+  if (!hasRegs) {
+    brief.register_map_todo = `Enumerate ${json.metadata.part || name}'s register map from the datasheet — Driverge could not auto-extract it. Add a "#define ${prefix}_REG_<NAME> 0x.." for each register address (and ${prefix}_<REG>_<FIELD>_MASK/_SHIFT for bit fields) using the driverge://datasheet resource, then wire the read/write helpers accordingly.`;
+  }
   return {
     files: makeFiles(name, header, source),
-    fill_in_brief: registerBrief(json),
+    fill_in_brief: brief,
   };
 }
 
@@ -234,13 +273,17 @@ function commandDriver(
     );
   }
 
-  header.push("/* Command codes. */");
-  const seen = new Set<string>();
-  for (const c of commands) {
-    const macroName = `${prefix}_CMD_${macro(c.name)}`;
-    if (seen.has(macroName)) continue;
-    seen.add(macroName);
-    header.push(`#define ${macroName} ${c.code.toUpperCase().replace("0X", "0x")}`);
+  if (commands.length === 0) {
+    header.push(...commandSetTodo(prefix, json.extraction?.detectedPages ?? []));
+  } else {
+    header.push("/* Command codes. */");
+    const seen = new Set<string>();
+    for (const c of commands) {
+      const macroName = `${prefix}_CMD_${macro(c.name)}`;
+      if (seen.has(macroName)) continue;
+      seen.add(macroName);
+      header.push(`#define ${macroName} ${c.code.toUpperCase().replace("0X", "0x")}`);
+    }
   }
 
   if (crc) {
@@ -341,6 +384,9 @@ function commandDriver(
   };
   if (crc) {
     brief.crc_todo = `Implement ${name}_crc8: CRC-${crc.width}, polynomial ${crc.poly}, init ${crc.init}, per the datasheet checksum section.`;
+  }
+  if (commands.length === 0) {
+    brief.command_set_todo = `Enumerate ${json.metadata.part || name}'s command set from the datasheet — Driverge could not auto-extract it. Add a "#define ${prefix}_CMD_<NAME> 0x.." for each command using the driverge://datasheet resource.`;
   }
 
   return { files: makeFiles(name, header, source), fill_in_brief: brief };

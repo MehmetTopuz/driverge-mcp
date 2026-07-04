@@ -5,13 +5,13 @@
 // host AI by ref. See wiki: json-schema-as-contract, mcp-tool-usage-flow.
 
 import { extractCommands, extractProtocol } from "../pdf/command.js";
-import { detectInterfaceKind } from "../pdf/interface-kind.js";
+import { detectInterfaceKind, detectSections } from "../pdf/interface-kind.js";
 import { detectManufacturer } from "../pdf/manufacturer.js";
 import { detectPart } from "../pdf/part.js";
 import { findRegisterTable } from "../pdf/register-table.js";
 import { findTiRegisterMap } from "../pdf/ti-register-map.js";
-import type { PageContent, PdfAnalysis } from "../pdf/types.js";
-import type { DatasheetJson, DeviceInterface } from "./types.js";
+import type { InterfaceKind, PageContent, PdfAnalysis } from "../pdf/types.js";
+import type { DatasheetJson, DeviceInterface, Extraction } from "./types.js";
 import { validateDatasheet } from "./validate.js";
 
 function buildInterface(pages: PageContent[], kind: string): DeviceInterface {
@@ -33,11 +33,52 @@ function buildInterface(pages: PageContent[], kind: string): DeviceInterface {
   return { kind: "register_map", registers };
 }
 
+/**
+ * Classify how complete the deterministic extraction is (see wiki:
+ * graceful-degradation). An empty map is a *deferral* (host-AI-completable) rather
+ * than a failure whenever there's positive evidence of that interface — a detected
+ * section, or the kind classifier landing on it — and only `none` (a hard error)
+ * when there is no signal at all.
+ */
+export function deriveExtraction(
+  iface: DeviceInterface,
+  sections: { registerPages: number[]; commandPages: number[] },
+  kind: InterfaceKind,
+  busKnown: boolean,
+): Extraction {
+  // An empty map defers (host-AI-completable) whenever there's ANY interface
+  // signal — a detected section, a concrete kind, or even a detected bus (a part
+  // with a known I2C/SPI bus almost certainly has registers/commands we just
+  // couldn't parse). Only a truly signal-less PDF is `none` (a hard error).
+  if (iface.kind === "register_map") {
+    if (iface.registers.length === 0) {
+      const detectedPages = sections.registerPages;
+      const deferred =
+        detectedPages.length > 0 || kind === "register_map" || busKnown;
+      return { status: deferred ? "deferred" : "none", detectedPages };
+    }
+    const hasBits = iface.registers.some((r) => r.bitFields.length > 0);
+    return {
+      status: hasBits ? "complete" : "partial",
+      detectedPages: sections.registerPages,
+    };
+  }
+  if (iface.commands.length === 0) {
+    const detectedPages = sections.commandPages;
+    const deferred =
+      detectedPages.length > 0 || kind === "command_set" || busKnown;
+    return { status: deferred ? "deferred" : "none", detectedPages };
+  }
+  return { status: "complete", detectedPages: sections.commandPages };
+}
+
 /** Assemble + validate the datasheet contract from a completed PDF analysis. */
 export function assembleDatasheet(analysis: PdfAnalysis): DatasheetJson {
   const { pages } = analysis;
   const manufacturer = detectManufacturer(pages);
   const kind = detectInterfaceKind(pages).kind;
+  const iface = buildInterface(pages, kind);
+  const protocol = extractProtocol(pages);
 
   const partial = {
     metadata: {
@@ -47,8 +88,14 @@ export function assembleDatasheet(analysis: PdfAnalysis): DatasheetJson {
       pdfType: analysis.type,
       pageCount: analysis.pageCount,
     },
-    protocol: extractProtocol(pages),
-    interface: buildInterface(pages, kind),
+    protocol,
+    interface: iface,
+    extraction: deriveExtraction(
+      iface,
+      detectSections(pages),
+      kind,
+      protocol.bus !== "unknown",
+    ),
   };
 
   const validation = validateDatasheet({

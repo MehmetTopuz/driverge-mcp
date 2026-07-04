@@ -3,9 +3,17 @@
 // validate-before-sending-to-claude). Errors fail validation; warnings do not.
 
 import type { Register } from "../pdf/types.js";
-import type { Command, DatasheetJson, ValidationResult } from "./types.js";
+import type {
+  Command,
+  DatasheetJson,
+  ExtractionStatus,
+  ValidationResult,
+} from "./types.js";
 
 const HEX_ONLY = /^0x[0-9a-f]+$/i;
+
+const detectedOn = (pages: number[]): string =>
+  pages.length > 0 ? ` (page(s) ${pages.join(", ")})` : "";
 
 export function validateDatasheet(d: DatasheetJson): ValidationResult {
   const errors: string[] = [];
@@ -14,19 +22,42 @@ export function validateDatasheet(d: DatasheetJson): ValidationResult {
   if (!d.metadata.part) warnings.push("metadata.part is empty");
   if (d.protocol.bus === "unknown") warnings.push("protocol.bus is unknown");
 
+  const status = d.extraction?.status;
+  const pages = d.extraction?.detectedPages ?? [];
+
   if (d.interface.kind === "register_map") {
-    validateRegisters(d.interface.registers, errors);
+    validateRegisters(d.interface.registers, errors, warnings, status, pages);
   } else {
-    validateCommands(d.interface.commands, errors, warnings);
+    validateCommands(d.interface.commands, errors, warnings, status, pages);
   }
 
   return { valid: errors.length === 0, errors, warnings };
 }
 
-function validateRegisters(registers: Register[], errors: string[]): void {
+function validateRegisters(
+  registers: Register[],
+  errors: string[],
+  warnings: string[],
+  status: ExtractionStatus | undefined,
+  pages: number[],
+): void {
   if (registers.length === 0) {
-    errors.push("register_map has no registers");
+    // A detected-but-unparsed map is a host-AI-completable deferral, not a failure
+    // (see wiki: graceful-degradation); only a true no-signal map is an error.
+    if (status === "deferred") {
+      warnings.push(
+        `register map detected${detectedOn(pages)} but not auto-extracted — the host AI must complete it from the datasheet resource`,
+      );
+    } else {
+      errors.push("register_map has no registers");
+    }
     return;
+  }
+
+  if (status === "partial") {
+    warnings.push(
+      "register map is partial — addresses extracted without bit-field detail; the host AI should add bit fields from the datasheet",
+    );
   }
 
   const addressCount = new Map<string, number>();
@@ -74,9 +105,17 @@ function validateCommands(
   commands: Command[],
   errors: string[],
   warnings: string[],
+  status: ExtractionStatus | undefined,
+  pages: number[],
 ): void {
   if (commands.length === 0) {
-    errors.push("command_set has no commands");
+    if (status === "deferred") {
+      warnings.push(
+        `command set detected${detectedOn(pages)} but not auto-extracted — the host AI must complete it from the datasheet resource`,
+      );
+    } else {
+      errors.push("command_set has no commands");
+    }
     return;
   }
 

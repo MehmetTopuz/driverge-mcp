@@ -26,6 +26,10 @@ export interface FillInBrief {
   crc_todo?: string;
   /** Present for native targets whose HAL seam needs board bring-up. */
   hal_setup_todo?: string;
+  /** Present when extraction was deferred: the host AI must enumerate the register map. */
+  register_map_todo?: string;
+  /** Present when extraction was deferred: the host AI must enumerate the command set. */
+  command_set_todo?: string;
 }
 
 export interface DriverArtifact {
