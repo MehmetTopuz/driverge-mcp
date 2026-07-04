@@ -67,8 +67,8 @@ driver to a different MCU, or just learning an unfamiliar chip's register map.
    commands + CRC) and the bus protocol into a **frozen JSON contract**, gated by
    a validator.
 2. **Generate** a driver for a target platform: a deterministic **thin-HAL
-   skeleton** — register/bit-field constants, the 5-function HAL seam, function
-   stubs — with every reasoning gap marked `TODO(driverge)` plus a `fill_in_brief`
+   skeleton** — register/bit-field constants, the five-function thin-HAL seam,
+   function stubs — with every reasoning gap marked `TODO(driverge)` plus a `fill_in_brief`
    telling the host AI exactly what to complete.
 3. **Validate** the completed driver: thin-HAL purity, no leftover TODOs, register
    references exist, bit-field masks match the JSON.
@@ -239,9 +239,9 @@ Reusing the same `ref` with a different `target` re-renders with **no re-parse**
 
 Driverge parses the BME280 memory map (14 registers, bit-fields, I²C address),
 validates it, and emits `bme280.h` / `bme280.c` — register `#define`s, bit-field
-`MASK`/`SHIFT` macros, the thin-HAL seam, and `bme280_init/read_register/
-write_register` stubs. The host AI then fills the init sequence and compensation
-docs from the datasheet prose.
+`MASK`/`SHIFT` macros, the thin-HAL seam, and the
+`bme280_init/read_register/write_register` stubs. The host AI then fills the
+init sequence and compensation docs from the datasheet prose.
 
 ### MCP surface
 
@@ -259,8 +259,8 @@ docs from the datasheet prose.
 ## Roadmap
 
 - **v0.x** — one reference sensor (BME280), portable thin-HAL core, MCP surface,
-  multiple clients. *(current)*
-- **v0.y** — native targets: ESP32 ✅, STM32 ✅, Arduino (next).
+  multiple clients. ✅
+- **v0.y** — native targets: ESP32 ✅, STM32 ✅, Arduino (next). *(current)*
 - **v1.0** — multi-manufacturer coverage and a stable, versioned JSON schema.
 
 ## Contributing
