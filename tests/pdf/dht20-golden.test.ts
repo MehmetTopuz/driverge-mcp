@@ -40,5 +40,9 @@ describe.skipIf(!existsSync(FIXTURE))("DHT20 command_set golden", () => {
       (c) => c.name === "trigger_measurement",
     );
     expect(trigger?.params).toEqual(["0x33", "0x00"]);
+    // Phase 4b: the DHT20 datasheet's prose CRC section ("the initial value of
+    // CRC is 0XFF" + the "1+X 4 +X 5 +X 8" polynomial expression) must now be
+    // captured and attached to the measurement command, not status.
+    expect(trigger?.crc).toEqual({ poly: "0x31", init: "0xFF", width: 8 });
   });
 });

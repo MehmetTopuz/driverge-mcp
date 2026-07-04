@@ -8,10 +8,17 @@
 // measurement/measure, status, reset) — so a bare hex mention (an I2C
 // address, an unrelated register, a status-equality check) is never mistaken
 // for a command. Reliable > complete: this never invents a name or code that
-// isn't anchored by both signals. See wiki: command-set-interface,
-// cross-vendor-coverage-scorecard.
+// isn't anchored by both signals.
+//
+// Phase 4b: after the commands are found, extractCrc (command.ts) is run over
+// the same pages and — if it resolves both poly and init (incl. the
+// polynomial-expression and "initial value" prose forms DHT20 uses) — the CRC
+// is attached to the measurement-role command only, mirroring the gating
+// extractCommands already applies via isDataReturning/isMeasurement. See
+// wiki: command-set-interface, cross-vendor-coverage-scorecard.
 
 import type { Command } from "../schema/types.js";
+import { extractCrc } from "./command.js";
 import type { PageContent } from "./types.js";
 
 const joinText = (pages: PageContent[]) =>
@@ -86,5 +93,12 @@ export function extractProseCommands(pages: PageContent[]): Command[] {
     last = command;
   }
 
-  return [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code));
+  const commands = [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code));
+  const crc = extractCrc(pages);
+  if (crc) {
+    for (const c of commands) {
+      if (/measurement/i.test(c.name)) c.crc = crc;
+    }
+  }
+  return commands;
 }

@@ -34,6 +34,28 @@ describe("extractCrc", () => {
   it("parses the CRC-8 parameters", () => {
     expect(extractCrc([SYNTH])).toEqual({ poly: "0x31", init: "0xFF", width: 8 });
   });
+
+  // Phase 4b generalization: DHT20/Aosong spells the same CRC-8 params as
+  // "the initial value of CRC is 0XFF" (not "Initialization 0xNN") and the
+  // polynomial as a superscript expression "1+X 4 +X 5 +X 8" (as pdfjs
+  // extracts x^8 + x^5 + x^4 + 1), rather than an explicit "Polynomial 0xNN".
+  // Dropping the implicit leading x^8 and setting bits {5,4,0} yields 0x31 —
+  // the SAME truncated poly SHT3x already reports.
+  it("parses the DHT20-style prose CRC (initial-value phrasing + polynomial expression)", () => {
+    const text =
+      "The measurement returns six bytes then a CRC byte. The initial value of CRC is 0XFF, " +
+      "and the CRC8 check polynomial is: CRC [7:0] = 1+X 4 +X 5 +X 8. Then compute values.";
+    expect(extractCrc([page(text)])).toEqual({ poly: "0x31", init: "0xFF", width: 8 });
+  });
+
+  // Isolates the polynomial-expression parsing from the init-phrasing: this
+  // page's ONLY poly signal is the expression form (no explicit
+  // "polynomial 0xNN" anywhere), so a pass that only special-cases the
+  // explicit hex form would fail here.
+  it("parses a bare polynomial-expression with no explicit-hex poly form present", () => {
+    const text = "Polynomial is: G(x) = 1+X 4 +X 5 +X 8. Initialization 0xFF.";
+    expect(extractCrc([page(text)])).toEqual({ poly: "0x31", init: "0xFF", width: 8 });
+  });
 });
 
 describe("extractCommands", () => {

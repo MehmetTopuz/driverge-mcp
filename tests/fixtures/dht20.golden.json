@@ -25,7 +25,12 @@
         "params": [
           "0x33",
           "0x00"
-        ]
+        ],
+        "crc": {
+          "poly": "0x31",
+          "init": "0xFF",
+          "width": 8
+        }
       }
     ]
   },
@@ -39,8 +44,7 @@
     "warnings": [
       "status: response length not declared",
       "status: CRC parameters missing",
-      "trigger_measurement: response length not declared",
-      "trigger_measurement: CRC parameters missing"
+      "trigger_measurement: response length not declared"
     ]
   }
 }

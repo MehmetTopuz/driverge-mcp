@@ -56,15 +56,40 @@ export function extractProtocol(pages: PageContent[]): Protocol {
   return addresses.length > 0 ? { bus, addresses } : { bus };
 }
 
+/** Parse a CRC polynomial written as an expression, e.g. "1+X 4 +X 5 +X 8"
+ *  (pdfjs renders superscripts as separate tokens). Drops the implicit highest
+ *  term (x^width) and returns the truncated poly byte. */
+function polyFromExpression(text: string): { poly: string; width: number } | undefined {
+  const m = /polynomial[^.]{0,80}/i.exec(text);
+  if (!m) return undefined;
+  const expr = m[0];
+  const exps = [...expr.matchAll(/x\s*\^?\s*(\d+)/gi)].map((e) => Number(e[1]));
+  if (exps.length === 0) return undefined;
+  const width = Math.max(...exps);
+  const bits = new Set(exps.filter((e) => e < width));
+  if (/[=+]\s*1\b/.test(expr) || /\b1\s*\+/.test(expr)) bits.add(0); // the "+1"/"1+" constant term
+  let poly = 0;
+  for (const b of bits) poly |= 1 << b;
+  return { poly: `0x${poly.toString(16).toUpperCase().padStart(2, "0")}`, width };
+}
+
 /** L4b — CRC parameters from the checksum section. */
 export function extractCrc(
   pages: PageContent[],
 ): { poly: string; init: string; width: number } | undefined {
   const text = joinText(pages);
-  const poly = /polynomial\s+(0x[0-9a-f]{2})/i.exec(text);
-  const init = /initiali[sz]ation\s+(0x[0-9a-f]{2})/i.exec(text);
-  if (!poly || !init) return undefined;
-  return { poly: upperHex(poly[1]), init: upperHex(init[1]), width: 8 };
+  const init =
+    /initiali[sz]ation\s+(0x[0-9a-f]{2})/i.exec(text) ??
+    /initial\s+value[^.]{0,40}?(0x[0-9a-f]{2})/i.exec(text);
+  if (!init) return undefined;
+
+  const polyHex = /polynomial\s+(0x[0-9a-f]{2})/i.exec(text);
+  const poly = polyHex
+    ? { poly: upperHex(polyHex[1]), width: 8 }
+    : polyFromExpression(text);
+  if (!poly) return undefined;
+
+  return { poly: poly.poly, init: upperHex(init[1]), width: poly.width };
 }
 
 // Only patterns whose NAME is a pure run of letters/spaces are used — a digit or

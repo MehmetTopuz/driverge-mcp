@@ -57,4 +57,31 @@ describe("extractProseCommands", () => {
     const text = "To reset the device, send the command 0xBA.";
     expect(extractProseCommands([page(text)])).toEqual([{ name: "soft_reset", code: "0xBA" }]);
   });
+
+  // Phase 4b: extractProseCommands must call extractCrc (command.ts) and
+  // attach the result ONLY to measurement-role commands (/measurement/i),
+  // never to status — mirroring the tabulated extractCommands path, which
+  // already gates CRC attachment on isDataReturning/name role.
+  it("attaches the prose CRC to the measurement command only, never to status", () => {
+    const text =
+      "After sending the measurement command 0xAC, wait. " +
+      "Get a byte of status word by sending 0x71. " +
+      "This command parameter has two bytes, the first byte is 0x33, and the second byte is 0x00. " +
+      "The initial value of CRC is 0XFF, and the CRC8 check polynomial is: CRC [7:0] = 1+X 4 +X 5 +X 8.";
+    const result = extractProseCommands([page(text)]);
+    const trigger = result.find((c) => c.name === "trigger_measurement");
+    const status = result.find((c) => c.name === "status");
+    expect(trigger?.crc).toEqual({ poly: "0x31", init: "0xFF", width: 8 });
+    expect(status?.crc).toBeUndefined();
+  });
+
+  // Attachment must be conditional on CRC prose actually being present, not
+  // unconditional — the earlier DHT20_TEXT cases above (no polynomial/init
+  // prose at all) must still yield commands with no `crc` field.
+  it("does not attach any CRC when no polynomial/init prose is present", () => {
+    const result = extractProseCommands([page(DHT20_TEXT)]);
+    for (const c of result) {
+      expect(c.crc).toBeUndefined();
+    }
+  });
 });
