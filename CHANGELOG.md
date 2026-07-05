@@ -30,6 +30,9 @@ Entries are grouped by the commit area vocabulary from
   I2C-only seam.
 - **Validation:** `validate_driver`'s brace/paren balance check no longer
   miscounts braces and parens that appear inside C string and char literals.
+- **Parser:** bus detection tolerates pdfjs splitting the I²C superscript into
+  separate tokens ("I 2 C"), so dual-variant sheets (MCP23017/MCP23S17) no
+  longer misclassify as SPI and generate the wrong HAL seam.
 
 ### Changed
 
@@ -46,6 +49,14 @@ Entries are grouped by the commit area vocabulary from
 
 ### Added
 
+- **Parser:** a Maxim register-matrix adapter (`REGISTER | B7..B0 | REG ADDR |
+  POR STATE` recap tables, e.g. MAX30102: 20 registers, 33 bit fields),
+  handling multi-section pages, wrapped labels, and split two-line titles.
+- **Parser:** vendor rules for Analog Devices, Maxim Integrated, and Melexis;
+  part patterns for the ADXL/MAX/MLX and ST VL53 families; SMBus datasheets
+  (e.g. MLX90614) now classify as I2C, matching the generated `hal_i2c_*` seam.
+- **Tests:** four cross-vendor scorecard fixtures (ADXL345, PCA9685, MLX90614,
+  MAX30102) with behavior goldens for the generic-extractor outputs.
 - **Parser (L1–L5):** PDF type detection, keyword page map, manufacturer +
   interface-kind detection, register-table extraction (BME280 Bosch + MCP23017
   Microchip layouts), scoped command-set + protocol/CRC extraction (SHT3x
