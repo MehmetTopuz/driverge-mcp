@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { generateDriver, generateStm32Driver, UnsupportedBusError } from "../../src/codegen";
 import { generatePortableDriver } from "../../src/codegen/portable";
 import { lintDriver } from "../../src/codegen/lint";
+import type { DriverArtifact } from "../../src/codegen/types";
 import type { DatasheetJson } from "../../src/schema/types";
-import { commandDatasheet, registerDatasheet } from "./helpers";
+import { commandDatasheet, registerDatasheet, spiRegisterDatasheet } from "./helpers";
 
 describe("generateDriver target=stm32 (register_map, BME280)", () => {
   const json = registerDatasheet("bme280.golden.json", "BME280");
@@ -50,32 +51,127 @@ describe("generateDriver target=stm32 (command_set, SHT3x)", () => {
   });
 });
 
-describe("generateStm32Driver refuses a SPI part (B1 regression pin)", () => {
-  // Mirrors the ESP32 pin: the CubeHAL seam references `${PREFIX}_I2C_ADDR`,
-  // which the portable core never defines for a SPI part.
-  const spiJson: DatasheetJson = {
-    ...registerDatasheet("bme280.golden.json", "BME280"),
-    protocol: { bus: "SPI" },
-  };
+describe("generateDriver target=stm32 (SPI, TMAG5170-shaped — Session A native SPI support)", () => {
+  // generateDriver(..., "stm32") still THROWS UnsupportedBusError for SPI today
+  // (pre-Session-A behavior) — computed in beforeAll (run phase) rather than at
+  // describe-body eval time (collection phase) so that throw fails only this
+  // suite's tests, not the whole file's collection.
+  const json = spiRegisterDatasheet("tmag5170.golden.json", "TMAG5170");
+  let art: DriverArtifact;
+  let paths: string[];
+  let hal: string;
+  let core: string;
+  let thrown: unknown;
 
-  it("throws UnsupportedBusError instead of emitting an I2C-only HAL seam", () => {
-    expect(() => generateStm32Driver(spiJson)).toThrow(UnsupportedBusError);
+  beforeAll(() => {
+    try {
+      art = generateDriver(json, "stm32");
+      paths = art.files.map((f) => f.path);
+      hal = art.files.find((f) => f.path === "tmag5170_hal_stm32.c")!.content;
+      core = art.files.find((f) => f.path === "tmag5170.c")!.content;
+    } catch (err) {
+      thrown = err;
+    }
   });
 
-  it("names the target, the bus, and points at the still-working portable target", () => {
-    let caught: unknown;
-    try {
-      generateStm32Driver(spiJson);
-    } catch (err) {
-      caught = err;
-    }
-    expect(caught).toBeInstanceOf(UnsupportedBusError);
-    const message = (caught as Error).message;
-    expect(message).toMatch(/stm32/i);
-    expect(message).toMatch(/SPI/);
-    expect(message).toMatch(/portable/);
+  // Re-throws the captured generation error (if any) so every `it` below fails
+  // individually and honestly — instead of the whole suite reporting one
+  // opaque beforeAll failure — while still not crashing test-file collection.
+  function requireGenerated(): void {
+    if (thrown) throw thrown;
+  }
+
+  it("no longer refuses SPI — emits the portable core plus a CubeHAL SPI seam file", () => {
+    requireGenerated();
+    expect(paths).toEqual(["tmag5170.h", "tmag5170.c", "tmag5170_hal_stm32.c"]);
+  });
+
+  it("keeps the driver CORE identical to portable (thin-HAL unchanged) and free of CubeHAL SPI/GPIO calls", () => {
+    requireGenerated();
+    const portable = generatePortableDriver(json).files;
+    expect(core).toBe(portable.find((f) => f.path === "tmag5170.c")!.content);
+    expect(core).not.toMatch(/HAL_SPI_|HAL_GPIO_/);
+  });
+
+  it("implements hal_spi_transfer via HAL_SPI_Transmit/Receive", () => {
+    requireGenerated();
+    expect(hal).toContain("HAL_SPI_Transmit(");
+    expect(hal).toContain("HAL_SPI_Receive(");
+    expect(hal).toContain("HAL_Delay(ms)");
+  });
+
+  it("frames the hal_spi_transfer transaction with CS low -> transmit -> receive -> CS high", () => {
+    requireGenerated();
+    const fn = hal.match(/hal_spi_transfer\([\s\S]*?\n\}/);
+    expect(fn).toBeTruthy();
+    const body = fn![0];
+    const resetIdx = body.indexOf("GPIO_PIN_RESET");
+    const txIdx = body.indexOf("HAL_SPI_Transmit(");
+    const rxIdx = body.indexOf("HAL_SPI_Receive(");
+    const setIdx = body.indexOf("GPIO_PIN_SET");
+    expect(resetIdx).toBeGreaterThanOrEqual(0);
+    expect(txIdx).toBeGreaterThan(resetIdx);
+    expect(rxIdx).toBeGreaterThan(txIdx);
+    expect(setIdx).toBeGreaterThan(rxIdx);
+  });
+
+  it("exposes a bind function taking the SPI handle and CS GPIO port/pin", () => {
+    requireGenerated();
+    expect(hal).toMatch(
+      /void tmag5170_stm32_bind\(SPI_HandleTypeDef \*hspi, GPIO_TypeDef \*cs_port, uint16_t cs_pin\)/,
+    );
+  });
+
+  it("adds a hal_setup_todo mentioning SPI peripheral + CS GPIO configuration and the bind call", () => {
+    requireGenerated();
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/SPI/);
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/CS/i);
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/tmag5170_stm32_bind/);
+  });
+
+  it("is deterministic", () => {
+    expect(generateDriver(json, "stm32").files).toEqual(art.files);
   });
 });
+
+describe("generateDriver target=stm32 (I2C behavior unchanged after SPI support lands)", () => {
+  it("still emits the CubeHAL Mem_Read/Write seam for an I2C part (BME280 golden)", () => {
+    const json = registerDatasheet("bme280.golden.json", "BME280");
+    const art = generateDriver(json, "stm32");
+    expect(art.files.map((f) => f.path)).toEqual(["bme280.h", "bme280.c", "bme280_hal_stm32.c"]);
+    const hal = art.files.find((f) => f.path === "bme280_hal_stm32.c")!.content;
+    expect(hal).toContain("HAL_I2C_Mem_Write(");
+    expect(hal).toContain("HAL_I2C_Mem_Read(");
+  });
+});
+
+describe.each(["UART", "unknown"] as const)(
+  "generateStm32Driver refuses a bus it doesn't support (%s)",
+  (bus) => {
+    const json: DatasheetJson = {
+      ...registerDatasheet("bme280.golden.json", "BME280"),
+      protocol: { bus },
+    };
+
+    it(`throws UnsupportedBusError for ${bus}`, () => {
+      expect(() => generateStm32Driver(json)).toThrow(UnsupportedBusError);
+    });
+
+    it("names the target, the bus, and points at the still-working portable target", () => {
+      let caught: unknown;
+      try {
+        generateStm32Driver(json);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(UnsupportedBusError);
+      const message = (caught as Error).message;
+      expect(message).toMatch(/stm32/i);
+      expect(message).toMatch(new RegExp(bus, "i"));
+      expect(message).toMatch(/portable/);
+    });
+  },
+);
 
 describe("lintDriver exempts the CubeHAL seam file from thin-HAL purity", () => {
   const json = registerDatasheet("bme280.golden.json", "BME280");

@@ -33,6 +33,31 @@ export function commandDatasheet(): DatasheetJson {
   return loadFixture("sht3x.golden.json") as unknown as DatasheetJson;
 }
 
+/**
+ * Wrap a register-table golden ({ registers }) into a full SPI DatasheetJson —
+ * mirrors registerDatasheet() but with protocol.bus "SPI" and no addresses (SPI
+ * parts are addressed by CS, not a bus address). Used to pin the combined
+ * hal_spi_transfer seam (see decisions: thin-hal-non-negotiable).
+ */
+export function spiRegisterDatasheet(goldenName: string, part: string): DatasheetJson {
+  const golden = loadFixture(goldenName) as { registers: unknown[] };
+  return {
+    metadata: {
+      part,
+      manufacturer: "Test Vendor",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "SPI" },
+    interface: {
+      kind: "register_map",
+      registers: golden.registers as never,
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  };
+}
+
 export function hasGcc(): boolean {
   try {
     execSync("gcc --version", { stdio: "ignore" });

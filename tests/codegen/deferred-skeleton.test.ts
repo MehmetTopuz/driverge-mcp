@@ -98,16 +98,27 @@ describe("generatePortableDriver — deferred register map", () => {
     expect(e.fill_in_brief.register_map_todo).toBeTruthy();
   });
 
-  it("refuses the SPI deferred part on esp32 instead of an I2C-only seam (B1 mirror pin)", () => {
-    expect(() => generateEsp32Driver(deferredRegister)).toThrow(UnsupportedBusError);
+  it("propagates the deferred skeleton to the esp32 target for a SPI part too, now that esp32 supports SPI (former B1 regression pin)", () => {
+    const e = generateEsp32Driver(deferredRegister);
+    expect(e.files.some((f) => /TODO\(driverge\)/.test(f.content))).toBe(true);
+    expect(e.fill_in_brief.register_map_todo).toBeTruthy();
+    expect(e.files.some((f) => f.path.endsWith("_hal_esp32.c"))).toBe(true);
+  });
+
+  it("still refuses a genuinely unsupported bus (UART) on esp32, deferred or not (B1 mirror pin)", () => {
+    const deferredUart: DatasheetJson = {
+      ...deferredRegister,
+      protocol: { bus: "UART" },
+    };
+    expect(() => generateEsp32Driver(deferredUart)).toThrow(UnsupportedBusError);
     let caught: unknown;
     try {
-      generateEsp32Driver(deferredRegister);
+      generateEsp32Driver(deferredUart);
     } catch (err) {
       caught = err;
     }
     const message = (caught as Error).message;
-    expect(message).toMatch(/SPI/);
+    expect(message).toMatch(/UART/);
     expect(message).toMatch(/portable/);
   });
 });

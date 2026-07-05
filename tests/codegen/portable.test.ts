@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generatePortableDriver } from "../../src/codegen/portable";
 import type { DatasheetJson } from "../../src/schema/types";
-import { commandDatasheet, registerDatasheet } from "./helpers";
+import { commandDatasheet, registerDatasheet, spiRegisterDatasheet } from "./helpers";
 
 const wide16Datasheet = (): DatasheetJson =>
   ({
@@ -30,6 +30,96 @@ const wide16Datasheet = (): DatasheetJson =>
     },
     validation: { valid: true, errors: [], warnings: [] },
   }) as unknown as DatasheetJson;
+
+// Session A: SPI seam redesign. One hal_spi_transfer() call == one CS-framed
+// transaction, replacing the old hal_spi_write/hal_spi_read pair (see decisions:
+// thin-hal-non-negotiable). ADXL345-shaped: a real SPI part whose register-read
+// convention sets the address MSB (0x80 | reg) — exactly the quirk the
+// quirks_todo must flag for the host AI to verify.
+const spiDatasheet = (): DatasheetJson =>
+  ({
+    metadata: {
+      part: "ADXL345",
+      manufacturer: "Analog Devices",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "SPI" },
+    interface: {
+      kind: "register_map",
+      registers: [
+        { name: "DEVID", address: "0x00", reset: "0xE5", width: 8, bitFields: [] },
+        {
+          name: "POWER_CTL",
+          address: "0x2D",
+          reset: "0x00",
+          width: 8,
+          bitFields: [{ name: "MEASURE", msb: 3, lsb: 3 }],
+        },
+      ],
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  }) as unknown as DatasheetJson;
+
+describe("generatePortableDriver — SPI combined-transfer seam (ADXL345-shaped)", () => {
+  const art = generatePortableDriver(spiDatasheet());
+  const header = art.files.find((f) => f.path === "adxl345.h")!.content;
+  const source = art.files.find((f) => f.path === "adxl345.c")!.content;
+
+  it("declares a single combined hal_spi_transfer seam function plus hal_delay_ms", () => {
+    expect(header).toContain(
+      "void hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
+    );
+    expect(header).toContain("void hal_delay_ms (uint32_t ms);");
+  });
+
+  it("never emits the retired two-function hal_spi_write/hal_spi_read seam", () => {
+    expect(header).not.toMatch(/hal_spi_write|hal_spi_read/);
+    expect(source).not.toMatch(/hal_spi_write|hal_spi_read/);
+  });
+
+  it("reads a register with a single hal_spi_transfer call (reg out, value in)", () => {
+    expect(source).toContain("hal_spi_transfer(&reg, 1, value, 1);");
+  });
+
+  it("writes a register by building a 2-byte frame and one hal_spi_transfer call (no rx)", () => {
+    expect(source).toContain("frame[0] = reg;");
+    expect(source).toContain("frame[1] = value;");
+    expect(source).toContain("hal_spi_transfer(frame, 2, NULL, 0);");
+  });
+
+  it("flags the register-address bit convention as a quirks_todo for the host AI to verify", () => {
+    // Stable contract phrase — the implementer must include this exact substring
+    // (case-insensitive) in fill_in_brief.quirks_todo for SPI parts, e.g. a note
+    // that many chips set the register-address MSB for reads (ADXL345: 0x80 | reg).
+    expect(art.fill_in_brief.quirks_todo).toMatch(/address bit convention/i);
+  });
+});
+
+describe("generatePortableDriver — SPI seam on a realistic multi-register part (TMAG5170 golden)", () => {
+  const json = spiRegisterDatasheet("tmag5170.golden.json", "TMAG5170");
+  const art = generatePortableDriver(json);
+  const header = art.files.find((f) => f.path === "tmag5170.h")!.content;
+  const source = art.files.find((f) => f.path === "tmag5170.c")!.content;
+
+  it("uses the combined hal_spi_transfer seam, never the retired write/read pair", () => {
+    expect(header).toContain(
+      "void hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
+    );
+    expect(header).not.toMatch(/hal_spi_write|hal_spi_read/);
+    expect(source).not.toMatch(/hal_spi_write|hal_spi_read/);
+  });
+
+  it("routes read_register/write_register through hal_spi_transfer", () => {
+    expect(source).toContain("hal_spi_transfer(&reg, 1, value, 1);");
+    expect(source).toContain("hal_spi_transfer(frame, 2, NULL, 0);");
+  });
+
+  it("still flags the address bit convention quirk for this real part", () => {
+    expect(art.fill_in_brief.quirks_todo).toMatch(/address bit convention/i);
+  });
+});
 
 describe("generatePortableDriver — register_map (BME280 golden)", () => {
   const json = registerDatasheet("bme280.golden.json", "BME280");

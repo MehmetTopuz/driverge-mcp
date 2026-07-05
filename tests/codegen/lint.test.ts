@@ -124,7 +124,7 @@ describe("lintDriver — completed deferred driver", () => {
     validation: { valid: true, errors: [], warnings: [] },
   };
 
-  it("passes when the host AI adds registers absent from the (deferred) JSON", () => {
+  it("passes when the host AI adds registers absent from the (deferred) JSON, using the combined hal_spi_transfer seam", () => {
     const files = generatePortableDriver(deferred).files.map((f) => {
       let c = f.content.replace(/TODO\(driverge\)/g, "done");
       if (f.path.endsWith(".h")) c += "\n#define AEAT8811_REG_STATUS 0x01\n";
@@ -133,8 +133,7 @@ describe("lintDriver — completed deferred driver", () => {
           "\nint aeat8811_status(aeat8811_t *dev, uint8_t *v) {\n" +
           "    uint8_t r = AEAT8811_REG_STATUS;\n" +
           "    (void)dev;\n" +
-          "    hal_spi_write(&r, 1);\n" +
-          "    hal_spi_read(v, 1);\n" +
+          "    hal_spi_transfer(&r, 1, v, 1);\n" +
           "    return 0;\n}\n";
       }
       return { path: f.path, content: c };
@@ -142,6 +141,63 @@ describe("lintDriver — completed deferred driver", () => {
     const r = lintDriver(files, deferred);
     expect(r.errors).toEqual([]);
     expect(r.valid).toBe(true);
+  });
+});
+
+describe("lintDriver — SPI seam family (Session A: single hal_spi_transfer)", () => {
+  // HAL_ALLOWED narrows to hal_i2c_read, hal_i2c_write, hal_spi_transfer,
+  // hal_delay_ms — the retired hal_spi_write/hal_spi_read pair must now fail
+  // lint as an unknown HAL function (see decisions: thin-hal-non-negotiable).
+  const spiJson: DatasheetJson = {
+    metadata: {
+      part: "TMAG5170",
+      manufacturer: "Texas Instruments",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "SPI" },
+    interface: {
+      kind: "register_map",
+      registers: [
+        { name: "ctrl", address: "0x00", reset: "0x00", width: 8, bitFields: [] },
+      ] as never,
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  };
+  const spiSkeleton = generatePortableDriver(spiJson).files;
+  const completedSpi = (): GeneratedFile[] =>
+    spiSkeleton.map((f) => ({
+      path: f.path,
+      content: f.content.replace(/TODO\(driverge\)/g, "done"),
+    }));
+
+  it("passes a completed SPI driver that calls only the combined hal_spi_transfer seam", () => {
+    const r = lintDriver(completedSpi(), spiJson);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects a driver that still calls the retired hal_spi_write", () => {
+    const withOldSeam = completedSpi().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", "hal_spi_write(0, 0);\n    return 0;") }
+        : f,
+    );
+    const r = lintDriver(withOldSeam, spiJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/hal_spi_write/);
+  });
+
+  it("rejects a driver that still calls the retired hal_spi_read", () => {
+    const withOldSeam = completedSpi().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", "hal_spi_read(0, 0);\n    return 0;") }
+        : f,
+    );
+    const r = lintDriver(withOldSeam, spiJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/hal_spi_read/);
   });
 });
 
