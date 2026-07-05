@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateDatasheet } from "../../src/schema/validate";
+import type { DatasheetJson } from "../../src/schema/types";
 
 const base = {
   metadata: {
@@ -199,5 +200,81 @@ describe("validateDatasheet — graceful degradation (extraction status)", () =>
     );
     expect(r.valid).toBe(true);
     expect(r.warnings.join(" ")).toMatch(/partial|bit field|without/i);
+  });
+});
+
+// Session C — CAN joins the Bus enum. protocol.bus "CAN" must validate through
+// the SAME validator API (validateDatasheet) as I2C/SPI/UART — no bus-specific
+// carve-out — and must NOT trip the generic "protocol.bus is unknown" warning
+// (see src/schema/validate.ts). Cast through `unknown` because "CAN" is not yet
+// a member of the `Bus` union (src/schema/types.ts) — that is the coder's job
+// this session; these tests pin the contract the type must grow into. The raw
+// JSON Schema mirror (schemas/datasheet.schema.json protocol.bus enum) is edited
+// by the coder in lockstep; it has no separate Ajv-driven test suite in this
+// repo, so acceptance is pinned here, through the validator API, per the
+// orchestrator's contract note.
+describe("validateDatasheet — CAN bus (Session C)", () => {
+  const canBase = {
+    metadata: {
+      part: "CANTEMP",
+      manufacturer: "Test Vendor",
+      manufacturerConfidence: 1,
+      pdfType: "text_based" as const,
+      pageCount: 1,
+    },
+    protocol: { bus: "CAN" },
+    validation: { valid: true, errors: [], warnings: [] },
+  };
+
+  it("accepts a well-formed CAN register_map with registers", () => {
+    const r = validateDatasheet(
+      ({
+        ...canBase,
+        interface: {
+          kind: "register_map",
+          registers: [reg("mode", "0x10", "0x00", [bf("run_stop", 0, 0)])],
+        },
+      }) as unknown as DatasheetJson,
+    );
+    expect(r.valid).toBe(true);
+    expect(r.errors).toEqual([]);
+  });
+
+  it("does NOT fire the 'protocol.bus is unknown' warning for a CAN part", () => {
+    const r = validateDatasheet(
+      ({
+        ...canBase,
+        interface: {
+          kind: "register_map",
+          registers: [reg("mode", "0x10", "0x00", [bf("run_stop", 0, 0)])],
+        },
+      }) as unknown as DatasheetJson,
+    );
+    expect(r.warnings.join(" ")).not.toMatch(/bus is unknown/i);
+  });
+
+  it("treats a deferred/empty CAN register_map as a warning-only deferral (same as I2C/SPI/UART)", () => {
+    const r = validateDatasheet(
+      ({
+        ...canBase,
+        interface: { kind: "register_map", registers: [] },
+        extraction: { status: "deferred", detectedPages: [4] },
+      }) as unknown as DatasheetJson,
+    );
+    expect(r.valid).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(r.warnings.join(" ")).toMatch(/deferred|not auto-extracted|host AI|complete it/i);
+    expect(r.warnings.join(" ")).not.toMatch(/bus is unknown/i);
+  });
+
+  it("still hard-errors on a genuinely empty CAN register_map with no extraction signal (status 'none')", () => {
+    const r = validateDatasheet(
+      ({
+        ...canBase,
+        interface: { kind: "register_map", registers: [] },
+        extraction: { status: "none", detectedPages: [] },
+      }) as unknown as DatasheetJson,
+    );
+    expect(r.valid).toBe(false);
   });
 });

@@ -182,6 +182,59 @@ describe("generatePortableDriver — deferred register map (UART, Session B)", (
   });
 });
 
+// Session C: CAN twin of the UART deferred describe block above. A deferred CAN
+// part ALSO carries both reasoning gaps at once (register_map_todo AND
+// framing_todo), and — new this session — propagates correctly to the esp32
+// native target now that esp32 gained TWAI support (STM32 still refuses CAN
+// entirely; see tests/codegen/stm32.test.ts's describe.each(["CAN", "unknown"])).
+describe("generatePortableDriver — deferred register map (CAN, Session C)", () => {
+  // Cast through `unknown`: "CAN" is not yet a member of the `Bus` union
+  // (src/schema/types.ts) — that is the coder's job this session.
+  const deferredCan = {
+    metadata: {
+      part: "CANTEMP",
+      manufacturer: "Test Vendor",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 20,
+    },
+    protocol: { bus: "CAN" },
+    interface: { kind: "register_map", registers: [] },
+    extraction: { status: "deferred", detectedPages: [11] },
+    validation: { valid: true, errors: [], warnings: ["register map deferred"] },
+  } as unknown as DatasheetJson;
+  const art = generatePortableDriver(deferredCan);
+  const header = art.files[0].content;
+
+  it("still renders the CAN seam even with an empty register map", () => {
+    expect(header).toContain(
+      "int hal_can_transfer(uint32_t id, const uint8_t *tx, uint8_t tx_len, uint8_t *rx, uint8_t *rx_len, uint32_t timeout_ms);",
+    );
+    expect(header).not.toMatch(/hal_i2c_|hal_spi_|hal_uart_/);
+  });
+
+  it("emits a register-map TODO(driverge) block naming the detected page", () => {
+    expect(header).toContain("TODO(driverge)");
+    expect(header).toMatch(/register map/i);
+    expect(header).toContain("11");
+  });
+
+  it("carries BOTH register_map_todo and framing_todo in the fill-in brief", () => {
+    expect(art.fill_in_brief.register_map_todo).toBeTruthy();
+    expect(art.fill_in_brief.framing_todo).toBeTruthy();
+    expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
+    expect(art.fill_in_brief.framing_todo).toContain("hal_can_transfer");
+  });
+
+  it("propagates the deferred skeleton to the esp32 target for a CAN part too (Session C native CAN/TWAI support)", () => {
+    const e = generateEsp32Driver(deferredCan);
+    expect(e.files.some((f) => /TODO\(driverge\)/.test(f.content))).toBe(true);
+    expect(e.fill_in_brief.register_map_todo).toBeTruthy();
+    expect(e.fill_in_brief.framing_todo).toBeTruthy();
+    expect(e.files.some((f) => f.path.endsWith("_hal_esp32.c"))).toBe(true);
+  });
+});
+
 describe("generatePortableDriver — deferred command set", () => {
   const art = generatePortableDriver(deferredCommand);
   const header = art.files[0].content;

@@ -158,6 +158,109 @@ describe("extractProtocol", () => {
     expect(p.bus).toBe("SPI");
   });
 
+  // Session C — CAN bus family (first pass). The CAN tier sits AFTER I2C/SPI/UART
+  // — a sheet documenting multiple interface variants still resolves those first
+  // (see the precedence pins below). "CAN" is both an uppercase bus keyword AND a
+  // common English modal verb ("the sensor CAN operate..."), so detection
+  // requires strict context: either an explicit "CAN bus"/"CAN 2.0[AB]"/"CAN FD"
+  // phrase, or a bare uppercase "CAN" co-occurring with strong CAN vocabulary
+  // (arbitration, DLC, "CAN controller", acceptance filter). CAN also has no
+  // universal register-access primitive on the wire — like UART, register/config
+  // access is device-specific (CANopen SDO, J1939 PGNs, message-ID schemes) — so,
+  // like UART, address extraction stays gated on I2C only below.
+
+  it("does NOT resolve CAN from an uppercase 'CAN' modal verb with no CAN-bus context (mandatory false-positive pin)", () => {
+    const p = extractProtocol([page("THE SENSOR CAN OPERATE IN LOW POWER MODE.")]);
+    expect(p.bus).toBe("unknown");
+  });
+
+  it("does NOT resolve CAN from a lowercase 'can' modal verb — I2C still wins (mandatory false-positive pin)", () => {
+    const p = extractProtocol([page("The device can be configured over I2C.")]);
+    expect(p.bus).toBe("I2C");
+  });
+
+  it("resolves I2C when a page mentions both I2C and CAN (I2C tier wins, evaluated first; mandatory pin)", () => {
+    const p = extractProtocol([
+      page(
+        "This part supports both an I2C interface and a CAN bus interface; select the mode via a strap pin.",
+      ),
+    ]);
+    expect(p.bus).toBe("I2C");
+  });
+
+  it("resolves UART when a page mentions both UART and CAN (UART tier wins over CAN; mandatory pin)", () => {
+    const p = extractProtocol([
+      page(
+        "This part supports both a UART interface and a CAN bus interface; select the mode via a strap pin.",
+      ),
+    ]);
+    expect(p.bus).toBe("UART");
+  });
+
+  it("detects CAN from an explicit 'CAN bus interface' phrase", () => {
+    const p = extractProtocol([
+      page("The node communicates over a CAN bus interface at up to 1 Mbit/s."),
+    ]);
+    expect(p.bus).toBe("CAN");
+  });
+
+  it("detects CAN from 'CAN 2.0B compliant controller with acceptance filters'", () => {
+    const p = extractProtocol([
+      page("This device integrates a CAN 2.0B compliant controller with acceptance filters."),
+    ]);
+    expect(p.bus).toBe("CAN");
+  });
+
+  it("detects CAN from a bare 'CAN FD' mention", () => {
+    const p = extractProtocol([page("The transceiver supports CAN FD for higher throughput.")]);
+    expect(p.bus).toBe("CAN");
+  });
+
+  it("detects CAN from an uppercase 'CAN' co-occurring with 'arbitration' (no explicit bus/2.0/FD suffix)", () => {
+    const p = extractProtocol([
+      page("The CAN peripheral resolves arbitration between competing nodes on the network."),
+    ]);
+    expect(p.bus).toBe("CAN");
+  });
+
+  it("detects CAN from an uppercase 'CAN' co-occurring with 'DLC'", () => {
+    const p = extractProtocol([
+      page("Each CAN frame's DLC field specifies the number of data bytes, from 0 to 8."),
+    ]);
+    expect(p.bus).toBe("CAN");
+  });
+
+  it("detects CAN from an uppercase 'CAN' co-occurring with 'acceptance filter'", () => {
+    const p = extractProtocol([
+      page("Configure the CAN peripheral's acceptance filter to receive only the desired message IDs."),
+    ]);
+    expect(p.bus).toBe("CAN");
+  });
+
+  it("detects CAN from the 'CAN controller' phrase alone (its own vocabulary co-occurrence)", () => {
+    const p = extractProtocol([
+      page("This automotive-grade device includes an integrated CAN controller for in-vehicle networking."),
+    ]);
+    expect(p.bus).toBe("CAN");
+  });
+
+  it("does NOT resolve CAN from lowercase 'can' even when 'arbitration' appears nearby (case-sensitivity guard)", () => {
+    const p = extractProtocol([
+      page("Multiple masters can share the bus; arbitration between them is handled by the protocol."),
+    ]);
+    expect(p.bus).toBe("unknown");
+  });
+
+  it("extracts NO addresses for a CAN part — the address gate stays I2C-only", () => {
+    const p = extractProtocol([
+      page(
+        "Communicates over a CAN bus interface. The default address 0x21 is a register offset, not a bus address.",
+      ),
+    ]);
+    expect(p.bus).toBe("CAN");
+    expect(p.addresses).toBeUndefined();
+  });
+
   it("still resolves unknown for plain unrelated text with no bus keyword at all", () => {
     const p = extractProtocol([page("This appendix lists mechanical dimensions and pinout only.")]);
     expect(p.bus).toBe("unknown");

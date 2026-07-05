@@ -86,6 +86,38 @@ export function uartRegisterDatasheet(goldenName: string, part: string): Datashe
   };
 }
 
+/**
+ * Wrap a register-table golden ({ registers }) into a full CAN DatasheetJson —
+ * mirrors uartRegisterDatasheet but with protocol.bus "CAN" and no addresses
+ * (CAN parts are addressed by arbitration ID, not a bus device address). Like
+ * UART, CAN has no universal register-access primitive over the wire — register/
+ * config access is device-specific (CANopen SDO, J1939 PGNs, raw message-ID
+ * schemes) — so the generated read/write bodies are deliberate TODO(driverge)
+ * framing gaps over the single hal_can_transfer seam function. Used to pin the
+ * hal_can_transfer seam and the framing_todo reasoning gap (Session C: CAN bus
+ * family, first pass). Cast through `unknown` because "CAN" is not yet a member
+ * of the `Bus` union in src/schema/types.ts — that is the coder's job this
+ * session; this helper pins the contract the type must grow into.
+ */
+export function canRegisterDatasheet(goldenName: string, part: string): DatasheetJson {
+  const golden = loadFixture(goldenName) as { registers: unknown[] };
+  return {
+    metadata: {
+      part,
+      manufacturer: "Test Vendor",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "CAN" },
+    interface: {
+      kind: "register_map",
+      registers: golden.registers as never,
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  } as unknown as DatasheetJson;
+}
+
 export function hasGcc(): boolean {
   try {
     execSync("gcc --version", { stdio: "ignore" });

@@ -218,6 +218,50 @@ describe("Driverge MCP surface", () => {
     },
   );
 
+  // Session C: esp32 gains native CAN/TWAI support, so — mirroring the SPI/UART
+  // positive pins above — a CAN ref now SUCCEEDS on esp32 instead of being
+  // refused. "CAN" is deliberately NOT added to the describe.each(["unknown"])
+  // refusal block above: esp32 genuinely supports it now.
+  it("generate_driver renders the esp32 target for a CAN part (native CAN/TWAI support, Session C)", async () => {
+    const canRef = "ds_test_bme280_can";
+    // Cast through `unknown`: "CAN" is not yet a member of the `Bus` union
+    // (src/schema/types.ts) — that is the coder's job this session.
+    putDatasheet({
+      ref: canRef,
+      pdfPath: "/x/bme280-can.pdf",
+      json: { ...validJson, protocol: { bus: "CAN" } } as unknown as DatasheetJson,
+    });
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: canRef, target: "esp32" },
+    });
+    expect((result as ToolResult).isError).toBeFalsy();
+    const artifact = JSON.parse(firstText(result));
+    expect(artifact.files.map((f: { path: string }) => f.path)).toContain("bme280_hal_esp32.c");
+  });
+
+  // Session C: STM32 stays OUT of scope for CAN (bxCAN/FDCAN family split
+  // deferred to a future session) — the standard UnsupportedBusError refusal,
+  // pinned at both the codegen level (tests/codegen/stm32.test.ts's
+  // describe.each(["CAN", "unknown"])) and here at the MCP tool-call level.
+  it("generate_driver refuses the stm32 target for a CAN part (Session C: STM32 CAN deferred to a future session)", async () => {
+    const canRef = "ds_test_bme280_can_stm32";
+    putDatasheet({
+      ref: canRef,
+      pdfPath: "/x/bme280-can-stm32.pdf",
+      json: { ...validJson, protocol: { bus: "CAN" } } as unknown as DatasheetJson,
+    });
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: canRef, target: "stm32" },
+    });
+    expect((result as ToolResult).isError).toBe(true);
+    expect(firstText(result)).toMatch(/CAN/);
+    expect(firstText(result)).toMatch(/portable/);
+  });
+
   it("generate_driver rejects a not-yet-supported native target (arduino)", async () => {
     const client = await connectClient();
     const result = await client.callTool({

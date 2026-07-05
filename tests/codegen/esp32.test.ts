@@ -5,6 +5,7 @@ import { lintDriver } from "../../src/codegen/lint";
 import type { DriverArtifact } from "../../src/codegen/types";
 import type { DatasheetJson } from "../../src/schema/types";
 import {
+  canRegisterDatasheet,
   commandDatasheet,
   registerDatasheet,
   spiRegisterDatasheet,
@@ -206,6 +207,106 @@ describe("generateDriver target=esp32 (UART, MHZ19-shaped CO2 sensor — Session
   it("is deterministic", () => {
     requireGenerated();
     expect(generateDriver(json, "esp32").files).toEqual(art.files);
+  });
+});
+
+describe("generateDriver target=esp32 (CAN, CANTEMP-shaped — Session C native CAN/TWAI support)", () => {
+  // generateDriver(..., "esp32") still THROWS UnsupportedBusError for CAN today
+  // (pre-Session-C behavior) — computed in beforeAll (run phase) rather than at
+  // describe-body eval time (collection phase), same pattern as Session A's SPI /
+  // Session B's UART describe blocks above.
+  const json = canRegisterDatasheet("bme280.golden.json", "CANTEMP");
+  let art: DriverArtifact;
+  let paths: string[];
+  let hal: string;
+  let core: string;
+  let header: string;
+  let thrown: unknown;
+
+  beforeAll(() => {
+    try {
+      art = generateDriver(json, "esp32");
+      paths = art.files.map((f) => f.path);
+      hal = art.files.find((f) => f.path === "cantemp_hal_esp32.c")!.content;
+      core = art.files.find((f) => f.path === "cantemp.c")!.content;
+      header = art.files.find((f) => f.path === "cantemp.h")!.content;
+    } catch (err) {
+      thrown = err;
+    }
+  });
+
+  function requireGenerated(): void {
+    if (thrown) throw thrown;
+  }
+
+  it("accepts CAN — emits the portable core plus an ESP-IDF TWAI seam file", () => {
+    requireGenerated();
+    expect(paths).toEqual(["cantemp.h", "cantemp.c", "cantemp_hal_esp32.c"]);
+  });
+
+  it("keeps the driver CORE identical to portable (thin-HAL unchanged) and free of ESP-IDF TWAI calls", () => {
+    requireGenerated();
+    const portable = generatePortableDriver(json).files;
+    expect(header).toBe(portable.find((f) => f.path === "cantemp.h")!.content);
+    expect(core).toBe(portable.find((f) => f.path === "cantemp.c")!.content);
+    expect(core).not.toMatch(/twai_/);
+  });
+
+  it("implements the seam with ESP-IDF TWAI transmit/receive and a void-argument bind", () => {
+    requireGenerated();
+    expect(hal).toContain('#include "driver/twai.h"');
+    expect(hal).toContain("twai_transmit(");
+    expect(hal).toContain("twai_receive(");
+    expect(hal).toContain("twai_message_t");
+    expect(hal).toContain("pdMS_TO_TICKS(");
+    expect(hal).toContain("vTaskDelay(pdMS_TO_TICKS(ms))");
+    // Symmetry decision (documented for the coder): the bind signature takes NO
+    // arguments — the TWAI driver is a single app-global peripheral (unlike I2C/
+    // SPI/UART, which bind a specific bus/port handle), so there is nothing to
+    // store yet; the hook is reserved for parity with the other targets' bind().
+    expect(hal).toMatch(/void cantemp_esp32_bind\(void\)/);
+  });
+
+  it("adds a hal_setup_todo naming twai_driver_install and mentioning bitrate and acceptance-filter config", () => {
+    requireGenerated();
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/twai_driver_install/);
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/bitrate|baud/i);
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/acceptance|filter/i);
+  });
+
+  it("is deterministic", () => {
+    requireGenerated();
+    expect(generateDriver(json, "esp32").files).toEqual(art.files);
+  });
+});
+
+describe("generateDriver target=esp32 (CAN command_set, CANTEMP-shaped)", () => {
+  const canCommandJson: DatasheetJson = {
+    metadata: {
+      part: "CANTEMP",
+      manufacturer: "Test Vendor",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "CAN" },
+    interface: {
+      kind: "command_set",
+      commands: [{ name: "read_temperature", code: "0x181" }],
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  } as unknown as DatasheetJson;
+
+  it("emits the command core plus an ESP-IDF TWAI seam", () => {
+    const art = generateDriver(canCommandJson, "esp32");
+    expect(art.files.map((f) => f.path)).toEqual([
+      "cantemp.h",
+      "cantemp.c",
+      "cantemp_hal_esp32.c",
+    ]);
+    expect(art.files.find((f) => f.path === "cantemp_hal_esp32.c")!.content).toContain(
+      "twai_transmit(",
+    );
   });
 });
 

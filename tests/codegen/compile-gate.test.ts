@@ -6,6 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { generateDriver } from "../../src/codegen";
 import { generatePortableDriver } from "../../src/codegen/portable";
 import {
+  canRegisterDatasheet,
   commandDatasheet,
   hasGcc,
   registerDatasheet,
@@ -89,5 +90,17 @@ describe.skipIf(!hasGcc())("portable driver compiles with gcc -c", () => {
     const art = generateDriver(uartRegisterDatasheet("bme280.golden.json", "MHZ19"), "stm32");
     // mhz19_hal_stm32.c needs the CubeHAL headers (the user's CubeIDE build).
     expect(() => compileOK(art.files, "mhz19.c")).not.toThrow();
+  });
+
+  it("CAN register_map skeleton compiles with placeholder TODO(driverge) framing bodies naming hal_can_transfer (Session C)", () => {
+    const art = generatePortableDriver(canRegisterDatasheet("bme280.golden.json", "CANTEMP"));
+    expect(() => compileOK(art.files, "cantemp.c")).not.toThrow();
+  });
+
+  it("esp32 target — the portable CORE still compiles for a CAN part (native CAN/TWAI support, Session C)", () => {
+    const art = generateDriver(canRegisterDatasheet("bme280.golden.json", "CANTEMP"), "esp32");
+    // Only the core .c is compiled; cantemp_hal_esp32.c needs the ESP-IDF TWAI
+    // driver headers (the user's idf.py build / HIL step, not the in-repo gate).
+    expect(() => compileOK(art.files, "cantemp.c")).not.toThrow();
   });
 });

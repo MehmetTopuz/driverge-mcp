@@ -258,6 +258,112 @@ describe("lintDriver — UART seam family (Session B: hal_uart_write/hal_uart_re
   });
 });
 
+describe("lintDriver — CAN seam family (Session C: hal_can_transfer)", () => {
+  // HAL_ALLOWED gains hal_can_transfer alongside hal_i2c_read, hal_i2c_write,
+  // hal_spi_transfer, hal_uart_write, hal_uart_read, hal_delay_ms — a completed
+  // CAN driver that calls the new seam must pass; any other hal_can_* name (e.g.
+  // a hypothetical hal_can_filter) must still trip lint as unknown.
+  const canJson: DatasheetJson = {
+    metadata: {
+      part: "CANTEMP",
+      manufacturer: "Test Vendor",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "CAN" },
+    interface: {
+      kind: "register_map",
+      registers: [
+        { name: "ctrl", address: "0x00", reset: "0x00", width: 8, bitFields: [] },
+      ] as never,
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  } as unknown as DatasheetJson;
+  const canSkeleton = generatePortableDriver(canJson).files;
+  const completedCan = (): GeneratedFile[] =>
+    canSkeleton.map((f) => ({
+      path: f.path,
+      content: f.content.replace(/TODO\(driverge\)/g, "done"),
+    }));
+
+  it("passes a completed CAN driver that calls hal_can_transfer (the new thin-HAL seam family)", () => {
+    const withSeamCall = completedCan().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", "hal_can_transfer(0,0,0,0,0,0);\n    return 0;") }
+        : f,
+    );
+    const r = lintDriver(withSeamCall, canJson);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects an unknown hal_can_* function outside the allowed seam (e.g. hal_can_filter)", () => {
+    const withUnknown = completedCan().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", "hal_can_filter(0);\n    return 0;") }
+        : f,
+    );
+    const r = lintDriver(withUnknown, canJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/hal_can_filter/);
+  });
+});
+
+describe("lintDriver — HAL_ALLOWED full family (I2C/SPI/UART/CAN + delay, Session C)", () => {
+  // Direct pin of the complete allowed family named in the orchestrator contract:
+  // hal_i2c_read, hal_i2c_write, hal_spi_transfer, hal_uart_write, hal_uart_read,
+  // hal_can_transfer, hal_delay_ms. lintDriver does not check that a seam call
+  // matches the part's OWN bus — only that the function name is a member of the
+  // allowed family — so all seven can be exercised together on one (I2C) skeleton.
+  it("accepts every allowed hal_* seam function name in one file", () => {
+    const allowedCalls = [
+      "hal_i2c_read(0,0,0,0);",
+      "hal_i2c_write(0,0,0,0);",
+      "hal_spi_transfer(0,0,0,0);",
+      "hal_uart_write(0,0);",
+      "hal_uart_read(0,0,0);",
+      "hal_can_transfer(0,0,0,0,0,0);",
+      "hal_delay_ms(0);",
+    ].join("\n    ");
+    const files = completed().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", `${allowedCalls}\n    return 0;`) }
+        : f,
+    );
+    const r = lintDriver(files, json);
+    expect(r.errors.filter((e) => /unknown HAL function/.test(e))).toEqual([]);
+  });
+});
+
+describe("lintDriver — ESP-IDF TWAI forbidden in the CORE, allowed in the seam file (Session C)", () => {
+  // FORBIDDEN gains ESP-IDF TWAI (/\btwai_\w+/): a core file calling twai_transmit
+  // must fail lint, but the same call inside a *_hal_esp32.c seam file is exempt
+  // (isHalImpl) — mirrors the existing i2c_master_*/spi_device_* ESP-IDF pins.
+  it("rejects an ESP-IDF TWAI call (twai_transmit) that leaks into a core file", () => {
+    const r = lintDriver(
+      withSource((c) => c.replace("return 0;", "twai_transmit(0,0);\n    return 0;")),
+      json,
+    );
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/ESP-IDF/);
+  });
+
+  it("does not flag the same twai_transmit call inside a *_hal_esp32.c seam file (isHalImpl exemption)", () => {
+    const files = completed().map((f) =>
+      f.path.endsWith(".c")
+        ? {
+            path: "bme280_hal_esp32.c",
+            content: f.content.replace("return 0;", "twai_transmit(0,0);\n    return 0;"),
+          }
+        : f,
+    );
+    const r = lintDriver(files, json);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+  });
+});
+
 describe("lintDriver — 16-bit register masks", () => {
   const json16: DatasheetJson = {
     metadata: {

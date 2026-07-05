@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generatePortableDriver } from "../../src/codegen/portable";
 import type { DatasheetJson } from "../../src/schema/types";
 import {
+  canRegisterDatasheet,
   commandDatasheet,
   registerDatasheet,
   spiRegisterDatasheet,
@@ -245,7 +246,136 @@ describe("generatePortableDriver — UART command_set (MHZ19-shaped CO2 sensor)"
   });
 });
 
-describe("generatePortableDriver — framing_todo is a UART-only reasoning gap (absent for I2C/SPI)", () => {
+// Session C — CAN bus family (first pass). Like UART, CAN has NO universal
+// register-access primitive (register/config access over CAN is device-specific:
+// CANopen SDO, J1939 PGNs, raw message-ID schemes — see decisions:
+// thin-hal-non-negotiable), so read_register/write_register are a deliberate
+// TODO(driverge) framing gap over a SINGLE combined hal_can_transfer() seam call
+// (unlike UART's two-function write/read pair — one CAN transfer sends a frame to
+// an arbitration id and optionally waits for one response frame). STM32 is
+// explicitly OUT of scope this pass (bxCAN/FDCAN family split); ESP32 gets a TWAI
+// seam (see tests/codegen/esp32.test.ts).
+const canDatasheetName = "CANTEMP";
+
+describe("generatePortableDriver — CAN thin-HAL seam (CANTEMP-shaped, register_map)", () => {
+  const json = canRegisterDatasheet("bme280.golden.json", canDatasheetName);
+  const art = generatePortableDriver(json);
+  const header = art.files.find((f) => f.path === "cantemp.h")!.content;
+  const source = art.files.find((f) => f.path === "cantemp.c")!.content;
+
+  it("declares the single combined hal_can_transfer seam plus hal_delay_ms — no hal_i2c_*/hal_spi_*/hal_uart_* anywhere", () => {
+    expect(header).toContain(
+      "int hal_can_transfer(uint32_t id, const uint8_t *tx, uint8_t tx_len, uint8_t *rx, uint8_t *rx_len, uint32_t timeout_ms);",
+    );
+    expect(header).toContain("void hal_delay_ms (uint32_t ms);");
+    expect(header).not.toMatch(/hal_i2c_|hal_spi_|hal_uart_/);
+    expect(source).not.toMatch(/hal_i2c_|hal_spi_|hal_uart_/);
+  });
+
+  it("documents hal_can_transfer semantics next to the seam declaration", () => {
+    const seamBlock = /\/\* Thin-HAL seam[\s\S]*?\/\* Driver handle/.exec(header)?.[0] ?? "";
+    expect(seamBlock).toMatch(/hal_can_transfer/);
+    // Stable contract phrases the coder's comment must include (case-insensitive):
+    // one call = one CAN frame sent to an arbitration id, 0 on success, and
+    // rx_len's dual in/out role (in: caller-supplied buffer capacity; out:
+    // bytes actually received).
+    expect(seamBlock).toMatch(/one CAN frame/i);
+    expect(seamBlock).toMatch(/arbitration id/i);
+    expect(seamBlock).toMatch(/0 on success/i);
+    expect(seamBlock).toMatch(/buffer capacity/i);
+    expect(seamBlock).toMatch(/actually received/i);
+  });
+
+  it("leaves read_register/write_register as TODO(driverge) framing gaps naming hal_can_transfer", () => {
+    const readFn = /cantemp_read_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    const writeFn = /cantemp_write_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    expect(readFn).toContain("TODO(driverge)");
+    expect(readFn).toMatch(/frame/i);
+    expect(readFn).toContain("hal_can_transfer");
+    expect(writeFn).toContain("TODO(driverge)");
+    expect(writeFn).toMatch(/frame/i);
+    expect(writeFn).toContain("hal_can_transfer");
+  });
+
+  it("adds a framing_todo naming hal_can_transfer and mentioning framing", () => {
+    expect(art.fill_in_brief.framing_todo).toBeDefined();
+    expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
+    expect(art.fill_in_brief.framing_todo).toContain("hal_can_transfer");
+  });
+
+  // Contract decision (documented for the coder): CAN's quirks_todo must name the
+  // CAN-specific reasoning gap — which arbitration id / SDO index / message ID
+  // maps to which register — NOT a generic "verify the checksum" line reused
+  // verbatim from UART. Pin: /arbitration|SDO|message.?id/i. This is deliberately
+  // an OR of near-synonymous CAN vocabulary (any one is an honest answer), not a
+  // vague catch-all — plain checksum wording alone must NOT satisfy it.
+  it("mentions arbitration id / SDO / message-ID reasoning in quirks_todo (CAN-specific wording, not generic checksum wording)", () => {
+    expect(art.fill_in_brief.quirks_todo).toMatch(/arbitration|SDO|message.?id/i);
+  });
+
+  it("is deterministic", () => {
+    expect(generatePortableDriver(json).files).toEqual(art.files);
+  });
+});
+
+const canCommandDatasheet = (): DatasheetJson =>
+  ({
+    metadata: {
+      part: canDatasheetName,
+      manufacturer: "Test Vendor",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "CAN" },
+    interface: {
+      kind: "command_set",
+      commands: [{ name: "read_temperature", code: "0x181" }],
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  }) as unknown as DatasheetJson;
+
+describe("generatePortableDriver — CAN command_set (CANTEMP-shaped)", () => {
+  const art = generatePortableDriver(canCommandDatasheet());
+  const header = art.files.find((f) => f.path === "cantemp.h")!.content;
+  const source = art.files.find((f) => f.path === "cantemp.c")!.content;
+
+  it("declares the hal_can_transfer seam and never an I2C/UART device-address macro", () => {
+    expect(header).toContain(
+      "int hal_can_transfer(uint32_t id, const uint8_t *tx, uint8_t tx_len, uint8_t *rx, uint8_t *rx_len, uint32_t timeout_ms);",
+    );
+    expect(header).not.toMatch(/hal_i2c_|hal_spi_|hal_uart_/);
+    expect(header).not.toMatch(/_I2C_ADDR/);
+    expect(source).not.toMatch(/hal_i2c_|hal_spi_|hal_uart_/);
+  });
+
+  it("leaves send_command/read_data as TODO(driverge) framing gaps naming hal_can_transfer", () => {
+    const sendFn = /cantemp_send_command\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    const readFn = /cantemp_read_data\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    expect(sendFn).toContain("TODO(driverge)");
+    expect(sendFn).toMatch(/frame/i);
+    expect(sendFn).toContain("hal_can_transfer");
+    expect(readFn).toContain("TODO(driverge)");
+    expect(readFn).toMatch(/frame/i);
+    expect(readFn).toContain("hal_can_transfer");
+  });
+
+  it("adds a framing_todo naming hal_can_transfer and mentioning framing", () => {
+    expect(art.fill_in_brief.framing_todo).toBeDefined();
+    expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
+    expect(art.fill_in_brief.framing_todo).toContain("hal_can_transfer");
+  });
+
+  it("mentions arbitration id / SDO / message-ID reasoning in quirks_todo (CAN-specific wording)", () => {
+    expect(art.fill_in_brief.quirks_todo).toMatch(/arbitration|SDO|message.?id/i);
+  });
+});
+
+// Session C adds a second bus to this "no universal register-access primitive"
+// family (CAN, alongside UART) — see the CAN-specific describe blocks above this
+// one for the positive framing_todo pins; this block only re-confirms I2C/SPI
+// still never get one.
+describe("generatePortableDriver — framing_todo is a UART/CAN-only reasoning gap (absent for I2C/SPI)", () => {
   it("is undefined for an I2C register_map part (BME280)", () => {
     const art = generatePortableDriver(registerDatasheet("bme280.golden.json", "BME280"));
     expect(art.fill_in_brief.framing_todo).toBeUndefined();

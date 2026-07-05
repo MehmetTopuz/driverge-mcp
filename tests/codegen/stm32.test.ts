@@ -210,13 +210,22 @@ describe("generateDriver target=stm32 (UART, MHZ19-shaped CO2 sensor — Session
   });
 });
 
-describe.each(["unknown"] as const)(
+// Session C: STM32 is explicitly OUT of scope for CAN this pass — the bxCAN vs
+// FDCAN peripheral family split across STM32 lines needs its own dedicated
+// session, so generateStm32Driver keeps refusing CAN with the same
+// UnsupportedBusError every other genuinely-unsupported bus gets (unlike esp32,
+// which gains real TWAI support this session — see tests/codegen/esp32.test.ts's
+// describe.each(["unknown"]), now CAN-free).
+describe.each(["CAN", "unknown"] as const)(
   "generateStm32Driver refuses a bus it doesn't support (%s)",
   (bus) => {
-    const json: DatasheetJson = {
+    // Cast through `unknown`: "CAN" is not yet a member of the `Bus` union
+    // (src/schema/types.ts) — that is the coder's job this session (unlike
+    // "unknown", which has always been a valid Bus literal).
+    const json = {
       ...registerDatasheet("bme280.golden.json", "BME280"),
       protocol: { bus },
-    };
+    } as unknown as DatasheetJson;
 
     it(`throws UnsupportedBusError for ${bus}`, () => {
       expect(() => generateStm32Driver(json)).toThrow(UnsupportedBusError);
