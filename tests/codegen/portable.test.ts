@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { generatePortableDriver } from "../../src/codegen/portable";
 import type { DatasheetJson } from "../../src/schema/types";
-import { commandDatasheet, registerDatasheet, spiRegisterDatasheet } from "./helpers";
+import {
+  commandDatasheet,
+  registerDatasheet,
+  spiRegisterDatasheet,
+  uartRegisterDatasheet,
+} from "./helpers";
 
 const wide16Datasheet = (): DatasheetJson =>
   ({
@@ -118,6 +123,142 @@ describe("generatePortableDriver — SPI seam on a realistic multi-register part
 
   it("still flags the address bit convention quirk for this real part", () => {
     expect(art.fill_in_brief.quirks_todo).toMatch(/address bit convention/i);
+  });
+});
+
+// Session B — UART bus family. UART has NO universal register-access primitive
+// (framing is device-specific: start bytes, command IDs, checksums — see
+// decisions: thin-hal-non-negotiable), so the generated read/write (or
+// send/read) bodies are a deliberate reasoning gap: a TODO(driverge) framing
+// marker over the raw hal_uart_write/hal_uart_read seam, never a real transfer.
+// fill_in_brief gains a NEW `framing_todo` field to hand that gap to the host AI.
+describe("generatePortableDriver — UART thin-HAL seam (MHZ19-shaped CO2 sensor, register_map)", () => {
+  const json = uartRegisterDatasheet("bme280.golden.json", "MHZ19");
+  const art = generatePortableDriver(json);
+  const header = art.files.find((f) => f.path === "mhz19.h")!.content;
+  const source = art.files.find((f) => f.path === "mhz19.c")!.content;
+
+  it("declares the hal_uart_write/hal_uart_read seam plus hal_delay_ms — no hal_i2c_*/hal_spi_* anywhere", () => {
+    expect(header).toContain("void hal_uart_write(const uint8_t *data, uint16_t len);");
+    expect(header).toContain(
+      "uint16_t hal_uart_read(uint8_t *data, uint16_t len, uint32_t timeout_ms);",
+    );
+    expect(header).toContain("void hal_delay_ms (uint32_t ms);");
+    expect(header).not.toMatch(/hal_i2c_|hal_spi_/);
+    expect(source).not.toMatch(/hal_i2c_|hal_spi_/);
+  });
+
+  it("documents hal_uart_write/hal_uart_read semantics next to the seam declarations", () => {
+    const seamBlock = /\/\* Thin-HAL seam[\s\S]*?\/\* Driver handle/.exec(header)?.[0] ?? "";
+    expect(seamBlock).toMatch(/hal_uart_write/);
+    expect(seamBlock).toMatch(/blocking write/i);
+    expect(seamBlock).toMatch(/len bytes/i);
+    expect(seamBlock).toMatch(/hal_uart_read/);
+    expect(seamBlock).toMatch(/up to.{0,10}len bytes/i);
+    expect(seamBlock).toMatch(/timeout_ms/);
+    expect(seamBlock).toMatch(/actually read/i);
+  });
+
+  it("leaves read_register/write_register as TODO(driverge) framing gaps naming both seam functions", () => {
+    const readFn = /mhz19_read_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    const writeFn = /mhz19_write_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    expect(readFn).toContain("TODO(driverge)");
+    expect(readFn).toMatch(/frame/i);
+    expect(readFn).toMatch(/hal_uart_write/);
+    expect(readFn).toMatch(/hal_uart_read/);
+    expect(writeFn).toContain("TODO(driverge)");
+    expect(writeFn).toMatch(/frame/i);
+    expect(writeFn).toMatch(/hal_uart_write/);
+    expect(writeFn).toMatch(/hal_uart_read/);
+  });
+
+  it("adds a framing_todo naming both seam functions and mentioning framing", () => {
+    expect(art.fill_in_brief.framing_todo).toBeDefined();
+    expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
+    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_write");
+    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_read");
+  });
+
+  it("mentions checksum verification in quirks_todo", () => {
+    expect(art.fill_in_brief.quirks_todo).toMatch(/checksum/i);
+  });
+
+  it("is deterministic", () => {
+    expect(generatePortableDriver(json).files).toEqual(art.files);
+  });
+});
+
+const uartCommandDatasheet = (): DatasheetJson =>
+  ({
+    metadata: {
+      part: "MHZ19",
+      manufacturer: "Winsen",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "UART" },
+    interface: {
+      kind: "command_set",
+      commands: [{ name: "read_co2_concentration", code: "0x86" }],
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  }) as unknown as DatasheetJson;
+
+describe("generatePortableDriver — UART command_set (MHZ19-shaped CO2 sensor)", () => {
+  const art = generatePortableDriver(uartCommandDatasheet());
+  const header = art.files.find((f) => f.path === "mhz19.h")!.content;
+  const source = art.files.find((f) => f.path === "mhz19.c")!.content;
+
+  it("declares the hal_uart_write/hal_uart_read seam and never an I2C device-address macro", () => {
+    expect(header).toContain("void hal_uart_write(const uint8_t *data, uint16_t len);");
+    expect(header).toContain(
+      "uint16_t hal_uart_read(uint8_t *data, uint16_t len, uint32_t timeout_ms);",
+    );
+    expect(header).not.toMatch(/hal_i2c_|hal_spi_/);
+    expect(header).not.toMatch(/_I2C_ADDR/);
+    expect(source).not.toMatch(/hal_i2c_|hal_spi_/);
+  });
+
+  it("leaves send_command/read_data as TODO(driverge) framing gaps naming both seam functions", () => {
+    const sendFn = /mhz19_send_command\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    const readFn = /mhz19_read_data\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    expect(sendFn).toContain("TODO(driverge)");
+    expect(sendFn).toMatch(/frame/i);
+    expect(sendFn).toMatch(/hal_uart_write/);
+    expect(sendFn).toMatch(/hal_uart_read/);
+    expect(readFn).toContain("TODO(driverge)");
+    expect(readFn).toMatch(/frame/i);
+    expect(readFn).toMatch(/hal_uart_write/);
+    expect(readFn).toMatch(/hal_uart_read/);
+  });
+
+  it("adds a framing_todo naming both seam functions and mentioning framing", () => {
+    expect(art.fill_in_brief.framing_todo).toBeDefined();
+    expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
+    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_write");
+    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_read");
+  });
+
+  it("mentions checksum verification in quirks_todo", () => {
+    expect(art.fill_in_brief.quirks_todo).toMatch(/checksum/i);
+  });
+});
+
+describe("generatePortableDriver — framing_todo is a UART-only reasoning gap (absent for I2C/SPI)", () => {
+  it("is undefined for an I2C register_map part (BME280)", () => {
+    const art = generatePortableDriver(registerDatasheet("bme280.golden.json", "BME280"));
+    expect(art.fill_in_brief.framing_todo).toBeUndefined();
+  });
+
+  it("is undefined for an SPI register_map part (TMAG5170)", () => {
+    const art = generatePortableDriver(spiRegisterDatasheet("tmag5170.golden.json", "TMAG5170"));
+    expect(art.fill_in_brief.framing_todo).toBeUndefined();
+  });
+
+  it("is undefined for an I2C command_set part (SHT3x)", () => {
+    const art = generatePortableDriver(commandDatasheet());
+    expect(art.fill_in_brief.framing_todo).toBeUndefined();
   });
 });
 

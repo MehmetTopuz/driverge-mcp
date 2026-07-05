@@ -201,6 +201,63 @@ describe("lintDriver — SPI seam family (Session A: single hal_spi_transfer)", 
   });
 });
 
+describe("lintDriver — UART seam family (Session B: hal_uart_write/hal_uart_read)", () => {
+  // HAL_ALLOWED gains hal_uart_write/hal_uart_read alongside hal_i2c_read,
+  // hal_i2c_write, hal_spi_transfer, hal_delay_ms — a completed UART driver that
+  // calls the new seam must pass; any other hal_* name must still trip lint.
+  const uartJson: DatasheetJson = {
+    metadata: {
+      part: "MHZ19",
+      manufacturer: "Winsen",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "UART" },
+    interface: {
+      kind: "register_map",
+      registers: [
+        { name: "ctrl", address: "0x00", reset: "0x00", width: 8, bitFields: [] },
+      ] as never,
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  };
+  const uartSkeleton = generatePortableDriver(uartJson).files;
+  const completedUart = (): GeneratedFile[] =>
+    uartSkeleton.map((f) => ({
+      path: f.path,
+      content: f.content.replace(/TODO\(driverge\)/g, "done"),
+    }));
+
+  it("passes a completed UART driver that calls hal_uart_write/hal_uart_read (the new thin-HAL seam family)", () => {
+    const withSeamCalls = completedUart().map((f) =>
+      f.path.endsWith(".c")
+        ? {
+            path: f.path,
+            content: f.content.replace(
+              "return 0;",
+              "hal_uart_write((const uint8_t *)&reg, 1);\n    hal_uart_read(&reg, 1, 100);\n    return 0;",
+            ),
+          }
+        : f,
+    );
+    const r = lintDriver(withSeamCalls, uartJson);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects an unknown hal_* function outside the UART seam", () => {
+    const withUnknown = completedUart().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", "hal_uart_flush();\n    return 0;") }
+        : f,
+    );
+    const r = lintDriver(withUnknown, uartJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/hal_uart_flush/);
+  });
+});
+
 describe("lintDriver — 16-bit register masks", () => {
   const json16: DatasheetJson = {
     metadata: {

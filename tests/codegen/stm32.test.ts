@@ -4,7 +4,12 @@ import { generatePortableDriver } from "../../src/codegen/portable";
 import { lintDriver } from "../../src/codegen/lint";
 import type { DriverArtifact } from "../../src/codegen/types";
 import type { DatasheetJson } from "../../src/schema/types";
-import { commandDatasheet, registerDatasheet, spiRegisterDatasheet } from "./helpers";
+import {
+  commandDatasheet,
+  registerDatasheet,
+  spiRegisterDatasheet,
+  uartRegisterDatasheet,
+} from "./helpers";
 
 describe("generateDriver target=stm32 (register_map, BME280)", () => {
   const json = registerDatasheet("bme280.golden.json", "BME280");
@@ -145,7 +150,67 @@ describe("generateDriver target=stm32 (I2C behavior unchanged after SPI support 
   });
 });
 
-describe.each(["UART", "unknown"] as const)(
+describe("generateDriver target=stm32 (UART, MHZ19-shaped CO2 sensor — Session B native UART support)", () => {
+  // generateDriver(..., "stm32") still THROWS UnsupportedBusError for UART today
+  // (pre-Session-B behavior) — computed in beforeAll (run phase) rather than at
+  // describe-body eval time (collection phase), same pattern as Session A's SPI
+  // describe block above.
+  const json = uartRegisterDatasheet("bme280.golden.json", "MHZ19");
+  let art: DriverArtifact;
+  let paths: string[];
+  let hal: string;
+  let core: string;
+  let thrown: unknown;
+
+  beforeAll(() => {
+    try {
+      art = generateDriver(json, "stm32");
+      paths = art.files.map((f) => f.path);
+      hal = art.files.find((f) => f.path === "mhz19_hal_stm32.c")!.content;
+      core = art.files.find((f) => f.path === "mhz19.c")!.content;
+    } catch (err) {
+      thrown = err;
+    }
+  });
+
+  function requireGenerated(): void {
+    if (thrown) throw thrown;
+  }
+
+  it("no longer refuses UART — emits the portable core plus a CubeHAL UART seam file", () => {
+    requireGenerated();
+    expect(paths).toEqual(["mhz19.h", "mhz19.c", "mhz19_hal_stm32.c"]);
+  });
+
+  it("keeps the driver CORE identical to portable (thin-HAL unchanged) and free of CubeHAL UART calls", () => {
+    requireGenerated();
+    const portable = generatePortableDriver(json).files;
+    expect(core).toBe(portable.find((f) => f.path === "mhz19.c")!.content);
+    expect(core).not.toMatch(/HAL_UART_|HAL_Delay/);
+  });
+
+  it("implements the seam via HAL_UART_Transmit/Receive with a UART_HandleTypeDef bind", () => {
+    requireGenerated();
+    expect(hal).toMatch(/void mhz19_stm32_bind\(UART_HandleTypeDef \*huart\)/);
+    expect(hal).toContain("HAL_UART_Transmit(");
+    expect(hal).toContain("HAL_UART_Receive(");
+    expect(hal).toContain("HAL_Delay(ms)");
+  });
+
+  it("adds a hal_setup_todo mentioning UART/USART peripheral config, baud rate, and the bind call", () => {
+    requireGenerated();
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/UART|USART/);
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/baud/i);
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/mhz19_stm32_bind/);
+  });
+
+  it("is deterministic", () => {
+    requireGenerated();
+    expect(generateDriver(json, "stm32").files).toEqual(art.files);
+  });
+});
+
+describe.each(["unknown"] as const)(
   "generateStm32Driver refuses a bus it doesn't support (%s)",
   (bus) => {
     const json: DatasheetJson = {

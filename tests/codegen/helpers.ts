@@ -58,6 +58,34 @@ export function spiRegisterDatasheet(goldenName: string, part: string): Datashee
   };
 }
 
+/**
+ * Wrap a register-table golden ({ registers }) into a full UART DatasheetJson —
+ * mirrors spiRegisterDatasheet but with protocol.bus "UART" and no addresses
+ * (UART has no bus address, and — unlike I2C/SPI — no universal register-access
+ * primitive: framing is device-specific, so the generated read/write bodies are
+ * deliberate TODO(driverge) framing gaps rather than real transfers). Used to pin
+ * the hal_uart_write/hal_uart_read seam and the framing_todo reasoning gap
+ * (Session B: UART bus family).
+ */
+export function uartRegisterDatasheet(goldenName: string, part: string): DatasheetJson {
+  const golden = loadFixture(goldenName) as { registers: unknown[] };
+  return {
+    metadata: {
+      part,
+      manufacturer: "Test Vendor",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "UART" },
+    interface: {
+      kind: "register_map",
+      registers: golden.registers as never,
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  };
+}
+
 export function hasGcc(): boolean {
   try {
     execSync("gcc --version", { stdio: "ignore" });

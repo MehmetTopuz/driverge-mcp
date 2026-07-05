@@ -4,7 +4,12 @@ import { generatePortableDriver } from "../../src/codegen/portable";
 import { lintDriver } from "../../src/codegen/lint";
 import type { DriverArtifact } from "../../src/codegen/types";
 import type { DatasheetJson } from "../../src/schema/types";
-import { commandDatasheet, registerDatasheet, spiRegisterDatasheet } from "./helpers";
+import {
+  commandDatasheet,
+  registerDatasheet,
+  spiRegisterDatasheet,
+  uartRegisterDatasheet,
+} from "./helpers";
 
 describe("generateDriver target=esp32 (register_map, BME280)", () => {
   const json = registerDatasheet("bme280.golden.json", "BME280");
@@ -138,7 +143,73 @@ describe("generateDriver target=esp32 (I2C behavior unchanged after SPI support 
   });
 });
 
-describe.each(["UART", "unknown"] as const)(
+describe("generateDriver target=esp32 (UART, MHZ19-shaped CO2 sensor — Session B native UART support)", () => {
+  // generateDriver(..., "esp32") still THROWS UnsupportedBusError for UART today
+  // (pre-Session-B behavior) — computed in beforeAll (run phase) rather than at
+  // describe-body eval time (collection phase) so that throw fails only this
+  // suite's tests, not the whole file's collection (same pattern as Session A's
+  // SPI describe block above).
+  const json = uartRegisterDatasheet("bme280.golden.json", "MHZ19");
+  let art: DriverArtifact;
+  let paths: string[];
+  let hal: string;
+  let core: string;
+  let header: string;
+  let thrown: unknown;
+
+  beforeAll(() => {
+    try {
+      art = generateDriver(json, "esp32");
+      paths = art.files.map((f) => f.path);
+      hal = art.files.find((f) => f.path === "mhz19_hal_esp32.c")!.content;
+      core = art.files.find((f) => f.path === "mhz19.c")!.content;
+      header = art.files.find((f) => f.path === "mhz19.h")!.content;
+    } catch (err) {
+      thrown = err;
+    }
+  });
+
+  function requireGenerated(): void {
+    if (thrown) throw thrown;
+  }
+
+  it("no longer refuses UART — emits the portable core plus an ESP-IDF UART seam file", () => {
+    requireGenerated();
+    expect(paths).toEqual(["mhz19.h", "mhz19.c", "mhz19_hal_esp32.c"]);
+  });
+
+  it("keeps the driver CORE identical to portable (thin-HAL unchanged) and free of ESP-IDF UART calls", () => {
+    requireGenerated();
+    const portable = generatePortableDriver(json).files;
+    expect(header).toBe(portable.find((f) => f.path === "mhz19.h")!.content);
+    expect(core).toBe(portable.find((f) => f.path === "mhz19.c")!.content);
+    expect(core).not.toMatch(/uart_write_bytes|uart_read_bytes|driver\/uart/);
+  });
+
+  it("implements the seam with ESP-IDF uart_write_bytes/uart_read_bytes and a uart_port_t bind", () => {
+    requireGenerated();
+    expect(hal).toContain('#include "driver/uart.h"');
+    expect(hal).toMatch(/void mhz19_esp32_bind\(uart_port_t port\)/);
+    expect(hal).toContain("uart_write_bytes(");
+    expect(hal).toContain("uart_read_bytes(");
+    expect(hal).toContain("pdMS_TO_TICKS(");
+    expect(hal).toContain("vTaskDelay(pdMS_TO_TICKS(ms))");
+  });
+
+  it("adds a hal_setup_todo naming uart_driver_install, the baud rate, and the bind call", () => {
+    requireGenerated();
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/uart_driver_install/);
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/baud/i);
+    expect(art.fill_in_brief.hal_setup_todo).toMatch(/mhz19_esp32_bind/);
+  });
+
+  it("is deterministic", () => {
+    requireGenerated();
+    expect(generateDriver(json, "esp32").files).toEqual(art.files);
+  });
+});
+
+describe.each(["unknown"] as const)(
   "generateEsp32Driver refuses a bus it doesn't support (%s)",
   (bus) => {
     const json: DatasheetJson = {

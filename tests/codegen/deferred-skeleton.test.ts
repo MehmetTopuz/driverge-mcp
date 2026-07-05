@@ -105,21 +105,80 @@ describe("generatePortableDriver — deferred register map", () => {
     expect(e.files.some((f) => f.path.endsWith("_hal_esp32.c"))).toBe(true);
   });
 
-  it("still refuses a genuinely unsupported bus (UART) on esp32, deferred or not (B1 mirror pin)", () => {
-    const deferredUart: DatasheetJson = {
+  // Session B: esp32 gained native UART support, so UART is no longer the
+  // "genuinely unsupported" bus used to mirror-pin the refusal — "unknown" is
+  // (see tests/codegen/esp32.test.ts's describe.each(["unknown"]) refusal pin).
+  it("still refuses a genuinely unsupported bus (unknown) on esp32, deferred or not (B1 mirror pin)", () => {
+    const deferredUnknown: DatasheetJson = {
       ...deferredRegister,
-      protocol: { bus: "UART" },
+      protocol: { bus: "unknown" },
     };
-    expect(() => generateEsp32Driver(deferredUart)).toThrow(UnsupportedBusError);
+    expect(() => generateEsp32Driver(deferredUnknown)).toThrow(UnsupportedBusError);
     let caught: unknown;
     try {
-      generateEsp32Driver(deferredUart);
+      generateEsp32Driver(deferredUnknown);
     } catch (err) {
       caught = err;
     }
     const message = (caught as Error).message;
-    expect(message).toMatch(/UART/);
+    expect(message).toMatch(/unknown/);
     expect(message).toMatch(/portable/);
+  });
+
+  it("propagates the deferred skeleton to the esp32 target for a UART part too, now that esp32 supports UART (Session B)", () => {
+    const deferredUartI2cShaped: DatasheetJson = {
+      ...deferredRegister,
+      protocol: { bus: "UART" },
+    };
+    const e = generateEsp32Driver(deferredUartI2cShaped);
+    expect(e.files.some((f) => /TODO\(driverge\)/.test(f.content))).toBe(true);
+    expect(e.fill_in_brief.register_map_todo).toBeTruthy();
+    expect(e.fill_in_brief.framing_todo).toBeTruthy();
+    expect(e.files.some((f) => f.path.endsWith("_hal_esp32.c"))).toBe(true);
+  });
+});
+
+describe("generatePortableDriver — deferred register map (UART, Session B)", () => {
+  // A deferred UART part has BOTH reasoning gaps at once: the register map
+  // itself wasn't auto-extracted (register_map_todo), AND UART's framing must be
+  // implemented by the host AI even once registers are known (framing_todo).
+  // Neither gap subsumes the other, so both must be present together.
+  const deferredUart: DatasheetJson = {
+    metadata: {
+      part: "MHZ19",
+      manufacturer: "Winsen",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 20,
+    },
+    protocol: { bus: "UART" },
+    interface: { kind: "register_map", registers: [] },
+    extraction: { status: "deferred", detectedPages: [9] },
+    validation: { valid: true, errors: [], warnings: ["register map deferred"] },
+  };
+  const art = generatePortableDriver(deferredUart);
+  const header = art.files[0].content;
+
+  it("still renders the UART seam even with an empty register map", () => {
+    expect(header).toContain("void hal_uart_write(const uint8_t *data, uint16_t len);");
+    expect(header).toContain(
+      "uint16_t hal_uart_read(uint8_t *data, uint16_t len, uint32_t timeout_ms);",
+    );
+    expect(header).not.toMatch(/hal_i2c_|hal_spi_/);
+  });
+
+  it("emits a register-map TODO(driverge) block naming the detected page", () => {
+    expect(header).toContain("TODO(driverge)");
+    expect(header).toMatch(/register map/i);
+    expect(header).toContain("9");
+  });
+
+  it("carries BOTH register_map_todo and framing_todo in the fill-in brief", () => {
+    expect(art.fill_in_brief.register_map_todo).toBeTruthy();
+    expect(art.fill_in_brief.framing_todo).toBeTruthy();
+    expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
+    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_write");
+    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_read");
   });
 });
 

@@ -5,7 +5,13 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { generateDriver } from "../../src/codegen";
 import { generatePortableDriver } from "../../src/codegen/portable";
-import { commandDatasheet, hasGcc, registerDatasheet, spiRegisterDatasheet } from "./helpers";
+import {
+  commandDatasheet,
+  hasGcc,
+  registerDatasheet,
+  spiRegisterDatasheet,
+  uartRegisterDatasheet,
+} from "./helpers";
 
 // L2 compile gate: the generated portable skeleton must be valid C. We compile
 // with `gcc -c` (no link) against the thin-HAL seam — the hal_* symbols stay
@@ -65,5 +71,23 @@ describe.skipIf(!hasGcc())("portable driver compiles with gcc -c", () => {
     const art = generateDriver(spiRegisterDatasheet("tmag5170.golden.json", "TMAG5170"), "stm32");
     // tmag5170_hal_stm32.c needs the CubeHAL headers (the user's CubeIDE build).
     expect(() => compileOK(art.files, "tmag5170.c")).not.toThrow();
+  });
+
+  it("UART register_map skeleton compiles with placeholder TODO(driverge) framing bodies (MHZ19-shaped, Session B)", () => {
+    const art = generatePortableDriver(uartRegisterDatasheet("bme280.golden.json", "MHZ19"));
+    expect(() => compileOK(art.files, "mhz19.c")).not.toThrow();
+  });
+
+  it("esp32 target — the portable CORE still compiles for a UART part (native UART support, Session B)", () => {
+    const art = generateDriver(uartRegisterDatasheet("bme280.golden.json", "MHZ19"), "esp32");
+    // Only the core .c is compiled; mhz19_hal_esp32.c needs the ESP-IDF UART
+    // driver headers (the user's idf.py build / HIL step, not the in-repo gate).
+    expect(() => compileOK(art.files, "mhz19.c")).not.toThrow();
+  });
+
+  it("stm32 target — the portable CORE still compiles for a UART part (native UART support, Session B)", () => {
+    const art = generateDriver(uartRegisterDatasheet("bme280.golden.json", "MHZ19"), "stm32");
+    // mhz19_hal_stm32.c needs the CubeHAL headers (the user's CubeIDE build).
+    expect(() => compileOK(art.files, "mhz19.c")).not.toThrow();
   });
 });

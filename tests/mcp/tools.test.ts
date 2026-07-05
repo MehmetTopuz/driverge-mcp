@@ -174,7 +174,27 @@ describe("Driverge MCP surface", () => {
     expect(artifact.files.map((f: { path: string }) => f.path)).toContain("bme280_hal_esp32.c");
   });
 
-  describe.each(["UART", "unknown"] as const)(
+  // Session B: esp32/stm32 gained native UART support, so a UART part is no
+  // longer refused — it now succeeds (see positive pin below), mirroring the
+  // SPI positive pin added in Session A above.
+  it("generate_driver renders the esp32 target for a UART part (native UART support, Session B)", async () => {
+    const uartRef = "ds_test_bme280_uart";
+    putDatasheet({
+      ref: uartRef,
+      pdfPath: "/x/bme280-uart.pdf",
+      json: { ...validJson, protocol: { bus: "UART" } },
+    });
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: uartRef, target: "esp32" },
+    });
+    expect((result as ToolResult).isError).toBeFalsy();
+    const artifact = JSON.parse(firstText(result));
+    expect(artifact.files.map((f: { path: string }) => f.path)).toContain("bme280_hal_esp32.c");
+  });
+
+  describe.each(["unknown"] as const)(
     "generate_driver refuses a bus a native target (esp32) doesn't support (%s)",
     (bus) => {
       it(`rejects ${bus} cleanly (B1 regression pin)`, async () => {

@@ -107,6 +107,61 @@ describe("extractProtocol", () => {
     expect(p.bus).toBe("I2C");
     expect(p.addresses).toEqual(["0x5A"]);
   });
+
+  // Session B — UART bus family. The UART tier sits AFTER the I2C and SPI tiers,
+  // so a sheet documenting multiple interface variants still resolves I2C/SPI
+  // first (see the precedence guards below). MH-Z19-style CO2 sensors and
+  // PMS5003-style particulate sensors are plain "UART"/TTL-serial parts with no
+  // universal register-access primitive — see decisions: thin-hal-non-negotiable.
+  it("detects the UART bus from a plain 'UART' mention (MH-Z19-style CO2 sensor)", () => {
+    const p = extractProtocol([
+      page("The sensor outputs data via UART (TTL level) at 9600 baud, 8-N-1."),
+    ]);
+    expect(p.bus).toBe("UART");
+  });
+
+  it("detects the UART bus from 'RS-232' and 'RS485' (with/without the hyphen)", () => {
+    expect(extractProtocol([page("This module supports RS-232 serial communication.")]).bus).toBe(
+      "UART",
+    );
+    expect(extractProtocol([page("An RS485 interface option is also available.")]).bus).toBe(
+      "UART",
+    );
+  });
+
+  it("detects the UART bus from 'TTL serial' phrasing", () => {
+    const p = extractProtocol([
+      page("Connect the module using a TTL serial to USB adapter for testing."),
+    ]);
+    expect(p.bus).toBe("UART");
+  });
+
+  it("extracts NO addresses for a UART part — the address gate stays I2C-only", () => {
+    const p = extractProtocol([
+      page("Communicates over UART. The default address 0x21 is a register offset, not a bus address."),
+    ]);
+    expect(p.bus).toBe("UART");
+    expect(p.addresses).toBeUndefined();
+  });
+
+  it("resolves I2C when a page mentions both I2C and UART (I2C tier wins, evaluated first)", () => {
+    const p = extractProtocol([
+      page("This part supports both I2C and UART interfaces; select the mode via the ADDR pin."),
+    ]);
+    expect(p.bus).toBe("I2C");
+  });
+
+  it("resolves SPI when a page mentions both SPI and UART (SPI tier wins over UART)", () => {
+    const p = extractProtocol([
+      page("This part supports both SPI and UART interfaces; select the mode via a strap pin."),
+    ]);
+    expect(p.bus).toBe("SPI");
+  });
+
+  it("still resolves unknown for plain unrelated text with no bus keyword at all", () => {
+    const p = extractProtocol([page("This appendix lists mechanical dimensions and pinout only.")]);
+    expect(p.bus).toBe("unknown");
+  });
 });
 
 describe("extractCrc", () => {
