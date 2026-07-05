@@ -14,7 +14,10 @@ import type { GeneratedFile } from "./types.js";
 const FORBIDDEN: ReadonlyArray<{ re: RegExp; api: string }> = [
   { re: /\bHAL_(?:I2C|SPI|UART)_\w+/, api: "STM32 CubeHAL" },
   { re: /\bLL_(?:I2C|SPI)_\w+/, api: "STM32 LL" },
-  { re: /\bi2c_master_\w+|\bspi_device_\w+|\bi2c_cmd_\w+|\buart_write_bytes\w*|\buart_read_bytes\w*/, api: "ESP-IDF" },
+  {
+    re: /\bi2c_master_\w+|\bspi_device_\w+|\bi2c_cmd_\w+|\buart_write_bytes\w*|\buart_read_bytes\w*|\btwai_\w+/,
+    api: "ESP-IDF",
+  },
   { re: /\bWire\.\w+|\bSPI\.(?:transfer|begin)\w*/, api: "Arduino" },
 ];
 
@@ -22,9 +25,10 @@ const FORBIDDEN: ReadonlyArray<{ re: RegExp; api: string }> = [
 // hal_spi_transfer(tx, tx_len, rx, rx_len) — one call per CS-framed transaction —
 // not a hal_spi_write/hal_spi_read pair; those are retired and must lint as
 // unknown HAL functions (see decisions: thin-hal-non-negotiable). UART
-// (Session B) adds hal_uart_write/hal_uart_read — any other hal_uart_* name
-// (e.g. a hypothetical hal_uart_flush) must still lint as unknown.
-const HAL_ALLOWED = /^hal_(?:i2c_(?:read|write)|spi_transfer|uart_(?:write|read)|delay_ms)$/;
+// (Session B) adds hal_uart_write/hal_uart_read; CAN (Session C) adds the
+// single combined hal_can_transfer — any other hal_uart_*/hal_can_* name (e.g.
+// a hypothetical hal_uart_flush or hal_can_filter) must still lint as unknown.
+const HAL_ALLOWED = /^hal_(?:i2c_(?:read|write)|spi_transfer|uart_(?:write|read)|can_transfer|delay_ms)$/;
 
 function balanced(text: string, open: string, close: string): boolean {
   let depth = 0;
@@ -83,7 +87,9 @@ export function lintDriver(
   }
   for (const m of coreCode.matchAll(/\bhal_[a-z0-9_]+/g)) {
     if (!HAL_ALLOWED.test(m[0])) {
-      errors.push(`unknown HAL function "${m[0]}" — thin HAL is hal_i2c_*/hal_spi_*/hal_delay_ms only`);
+      errors.push(
+        `unknown HAL function "${m[0]}" — thin HAL is hal_i2c_*/hal_spi_*/hal_uart_*/hal_can_transfer/hal_delay_ms only`,
+      );
     }
   }
 
