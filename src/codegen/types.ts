@@ -30,6 +30,8 @@ export interface FillInBrief {
   register_map_todo?: string;
   /** Present when extraction was deferred: the host AI must enumerate the command set. */
   command_set_todo?: string;
+  /** Present for UART parts: the host AI must implement the device's frame protocol over the seam. */
+  framing_todo?: string;
 }
 
 export interface DriverArtifact {

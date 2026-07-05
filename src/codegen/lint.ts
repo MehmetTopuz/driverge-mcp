@@ -14,15 +14,17 @@ import type { GeneratedFile } from "./types.js";
 const FORBIDDEN: ReadonlyArray<{ re: RegExp; api: string }> = [
   { re: /\bHAL_(?:I2C|SPI|UART)_\w+/, api: "STM32 CubeHAL" },
   { re: /\bLL_(?:I2C|SPI)_\w+/, api: "STM32 LL" },
-  { re: /\bi2c_master_\w+|\bspi_device_\w+|\bi2c_cmd_\w+/, api: "ESP-IDF" },
+  { re: /\bi2c_master_\w+|\bspi_device_\w+|\bi2c_cmd_\w+|\buart_write_bytes\w*|\buart_read_bytes\w*/, api: "ESP-IDF" },
   { re: /\bWire\.\w+|\bSPI\.(?:transfer|begin)\w*/, api: "Arduino" },
 ];
 
 // Allowed thin-HAL seam functions (families). SPI is a single combined
 // hal_spi_transfer(tx, tx_len, rx, rx_len) — one call per CS-framed transaction —
 // not a hal_spi_write/hal_spi_read pair; those are retired and must lint as
-// unknown HAL functions (see decisions: thin-hal-non-negotiable).
-const HAL_ALLOWED = /^hal_(?:i2c_(?:read|write)|spi_transfer|delay_ms)$/;
+// unknown HAL functions (see decisions: thin-hal-non-negotiable). UART
+// (Session B) adds hal_uart_write/hal_uart_read — any other hal_uart_* name
+// (e.g. a hypothetical hal_uart_flush) must still lint as unknown.
+const HAL_ALLOWED = /^hal_(?:i2c_(?:read|write)|spi_transfer|uart_(?:write|read)|delay_ms)$/;
 
 function balanced(text: string, open: string, close: string): boolean {
   let depth = 0;

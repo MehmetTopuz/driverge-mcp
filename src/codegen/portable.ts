@@ -81,20 +81,28 @@ function commandSetTodo(prefix: string, pages: number[]): string[] {
 // Each supported register_map bus contributes: the seam declaration line(s)
 // (rendered in the header, right below the "Thin-HAL seam" comment), the
 // driver-handle struct field, and the read_register/write_register bodies.
-// hal_delay_ms is common to every bus and stays outside this table. Sessions
-// B/C add UART/CAN rows here — keep each row self-contained so a new bus never
+// hal_delay_ms is common to every bus and stays outside this table. Session C
+// adds a CAN row here — keep each row self-contained so a new bus never
 // touches the others.
+//
+// UART is the odd row out: unlike I2C/SPI, UART has NO universal
+// register-access primitive — there's no address/register concept on the
+// wire, just a byte pipe, so read_register/write_register have no honest
+// implementation here. Its readBody/writeBody are therefore unused (see
+// uartFramingBody below, which renders a TODO(driverge) framing gap directly
+// in registerDriver/commandDriver instead of a seam call) — kept as empty
+// arrays purely so BusSeam's shape stays uniform across buses.
 
-type RegisterMapBus = "I2C" | "SPI";
+type RegisterMapBus = "I2C" | "SPI" | "UART";
 
 interface BusSeam {
   /** Lines appended after the "Thin-HAL seam" header comment, in order. */
   decl: string[];
   /** Field(s) for the driver handle typedef struct. */
   handleField: string;
-  /** Body of <name>_read_register (dev, reg, value already in scope). */
+  /** Body of <name>_read_register (dev, reg, value already in scope). Unused for UART. */
   readBody: string[];
-  /** Body of <name>_write_register (dev, reg, value already in scope). */
+  /** Body of <name>_write_register (dev, reg, value already in scope). Unused for UART. */
   writeBody: string[];
 }
 
@@ -125,7 +133,45 @@ const BUS_SEAM: Record<RegisterMapBus, BusSeam> = {
       "    hal_spi_transfer(frame, 2, NULL, 0);",
     ],
   },
+  UART: {
+    decl: [
+      "/* hal_uart_write is a blocking write of len bytes. */",
+      "/* hal_uart_read reads up to len bytes and returns the count actually read",
+      " * within timeout_ms. */",
+      "void hal_uart_write(const uint8_t *data, uint16_t len);",
+      "uint16_t hal_uart_read(uint8_t *data, uint16_t len, uint32_t timeout_ms);",
+    ],
+    handleField:
+      "    uint8_t _reserved; /* platform UART handle is bound inside the hal_uart_* implementation */",
+    readBody: [],
+    writeBody: [],
+  },
 };
+
+/** Which BUS_SEAM row a protocol.bus resolves to. "unknown" defaults to the I2C
+ *  seam, matching the pre-existing (pre-Session-B) fallback behavior. */
+function seamBusFor(bus: string): RegisterMapBus {
+  if (bus === "SPI") return "SPI";
+  if (bus === "UART") return "UART";
+  return "I2C";
+}
+
+// UART has no universal register/command framing (start bytes, IDs, checksums
+// are all device-specific — see decisions: thin-hal-non-negotiable), so rather
+// than fabricate a wire format, the generated body is a deliberate
+// TODO(driverge) reasoning gap over the raw hal_uart_write/hal_uart_read seam:
+// a compilable placeholder (params voided, returns -1) that names both seam
+// functions so the host AI knows exactly what to build on top of. See
+// fill_in_brief.framing_todo.
+function uartFramingBody(params: string[]): string[] {
+  return [
+    "    /* TODO(driverge): this device has no universal UART register/command",
+    "     * framing — build the request frame and call hal_uart_write(), then",
+    "     * parse the response via hal_uart_read(). See fill_in_brief.framing_todo. */",
+    ...params.map((p) => `    (void)${p};`),
+    "    return -1;",
+  ];
+}
 
 function bitFieldMacros(prefix: string, registers: Register[]): string[] {
   const lines: string[] = [];
@@ -149,8 +195,10 @@ function registerDriver(
   name: string,
   prefix: string,
 ): DriverArtifact {
-  const spi = json.protocol.bus === "SPI";
-  const seam = BUS_SEAM[spi ? "SPI" : "I2C"];
+  const busKind = seamBusFor(json.protocol.bus);
+  const spi = busKind === "SPI";
+  const uart = busKind === "UART";
+  const seam = BUS_SEAM[busKind];
   const addr = json.protocol.addresses?.[0];
   const guard = `${prefix}_H`;
   const type = `${name}_t`;
@@ -159,7 +207,11 @@ function registerDriver(
     AUTOGEN(
       json.metadata.part || name,
       json.metadata.manufacturer,
-      spi ? "Bus: SPI" : `Bus: I2C, address ${addr ?? "(unknown — see TODO)"}`,
+      spi
+        ? "Bus: SPI"
+        : uart
+          ? "Bus: UART"
+          : `Bus: I2C, address ${addr ?? "(unknown — see TODO)"}`,
     ),
     "",
     `#ifndef ${guard}`,
@@ -174,7 +226,7 @@ function registerDriver(
     "",
   ];
 
-  if (!spi) {
+  if (!spi && !uart) {
     if (addr) {
       header.push("/* I2C device address. */", `#define ${prefix}_I2C_ADDR ${addr}`, "");
     } else {
@@ -228,8 +280,12 @@ function registerDriver(
     "",
   );
 
-  const readBody = seam.readBody;
-  const writeBody = seam.writeBody;
+  const readBody = uart
+    ? uartFramingBody(["dev", "reg", "value"])
+    : ["    if (dev == NULL || value == NULL) {", "        return -1;", "    }", ...seam.readBody, "    return 0;"];
+  const writeBody = uart
+    ? uartFramingBody(["dev", "reg", "value"])
+    : ["    if (dev == NULL) {", "        return -1;", "    }", ...seam.writeBody, "    return 0;"];
 
   const source: string[] = [
     `#include "${name}.h"`,
@@ -238,28 +294,29 @@ function registerDriver(
     "    if (dev == NULL) {",
     "        return -1;",
     "    }",
-    ...(spi ? [] : [`    dev->i2c_addr = ${prefix}_I2C_ADDR;`]),
-    "    /* TODO(driverge): implement the power-on / reset init sequence — the",
-    "     * correct register write order and values, plus any required startup",
-    `     * delay. See fill_in_brief.init_sequence_todo. Use ${name}_write_register()`,
-    "     * and hal_delay_ms(). */",
+    ...(spi || uart ? [] : [`    dev->i2c_addr = ${prefix}_I2C_ADDR;`]),
+    ...(uart
+      ? [
+          "    /* TODO(driverge): implement the power-on / reset init sequence — the",
+          "     * correct command/frame sequence and any required startup delay. See",
+          "     * fill_in_brief.init_sequence_todo and fill_in_brief.framing_todo. Use",
+          "     * hal_uart_write()/hal_uart_read() and hal_delay_ms(). */",
+        ]
+      : [
+          "    /* TODO(driverge): implement the power-on / reset init sequence — the",
+          "     * correct register write order and values, plus any required startup",
+          `     * delay. See fill_in_brief.init_sequence_todo. Use ${name}_write_register()`,
+          "     * and hal_delay_ms(). */",
+        ]),
     "    return 0;",
     "}",
     "",
     `int ${name}_read_register(${type} *dev, uint8_t reg, uint8_t *value) {`,
-    "    if (dev == NULL || value == NULL) {",
-    "        return -1;",
-    "    }",
     ...readBody,
-    "    return 0;",
     "}",
     "",
     `int ${name}_write_register(${type} *dev, uint8_t reg, uint8_t value) {`,
-    "    if (dev == NULL) {",
-    "        return -1;",
-    "    }",
     ...writeBody,
-    "    return 0;",
     "}",
     "",
   ];
@@ -276,20 +333,30 @@ function registerDriver(
 
 function registerBrief(json: DatasheetJson): FillInBrief {
   const part = json.metadata.part || "the device";
+  const name = slug(part);
   const quirks = [
-    `Capture vendor timing/behavior quirks for ${part} (e.g. mandatory power-on delay, soft-reset requirement, read-back constraints) and enforce them in ${slug(part)}_init using hal_delay_ms.`,
+    `Capture vendor timing/behavior quirks for ${part} (e.g. mandatory power-on delay, soft-reset requirement, read-back constraints) and enforce them in ${name}_init using hal_delay_ms.`,
   ];
   if (json.protocol.bus === "SPI") {
     quirks.push(
       "Verify the register address bit convention: many SPI chips set the address MSB for reads (e.g. 0x80 | reg) — check the datasheet's SPI framing and adjust read_register/write_register.",
     );
   }
-  return {
+  if (json.protocol.bus === "UART") {
+    quirks.push(
+      "Verify the response checksum algorithm from the datasheet before trusting frame data — vendor checksum/CRC methods for UART command-and-response parts vary.",
+    );
+  }
+  const brief: FillInBrief = {
     init_sequence_todo: `Determine the correct power-on/reset init sequence for ${part}: which registers to write, in what order, with what values (mode/config), and any required startup delay. Read the datasheet init/operation section via the driverge://datasheet resource.`,
     quirks_todo: quirks.join(" "),
     doc_todo:
       "Add Doxygen comments for all public functions and any device-specific compensation/conversion formulas.",
   };
+  if (json.protocol.bus === "UART") {
+    brief.framing_todo = `Implement ${name}'s UART frame protocol in read_register/write_register: build request frames with hal_uart_write and parse responses with hal_uart_read, per the datasheet's communication/frame-format section.`;
+  }
+  return brief;
 }
 
 // ---------------------------------------------------------------------------
@@ -302,6 +369,7 @@ function commandDriver(
   name: string,
   prefix: string,
 ): DriverArtifact {
+  const uart = json.protocol.bus === "UART";
   const addr = json.protocol.addresses?.[0];
   const crc = commands.find((c) => c.crc)?.crc;
   const guard = `${prefix}_H`;
@@ -311,7 +379,9 @@ function commandDriver(
     AUTOGEN(
       json.metadata.part || name,
       json.metadata.manufacturer,
-      `Bus: I2C, address ${addr ?? "(unknown — see TODO)"} · command-set device`,
+      uart
+        ? "Bus: UART · command-set device"
+        : `Bus: I2C, address ${addr ?? "(unknown — see TODO)"} · command-set device`,
     ),
     "",
     `#ifndef ${guard}`,
@@ -326,7 +396,11 @@ function commandDriver(
     "",
   ];
 
-  if (addr) {
+  if (uart) {
+    // No bus device address on UART — only I2C command-set parts get an
+    // *_I2C_ADDR macro (see fill_in_brief.framing_todo for the UART reasoning
+    // gap this leaves instead).
+  } else if (addr) {
     header.push("/* I2C device address. */", `#define ${prefix}_I2C_ADDR ${addr}`, "");
   } else {
     header.push(
@@ -366,13 +440,17 @@ function commandDriver(
   header.push(
     "",
     "/* Thin-HAL seam — implement these for your platform (see thin-hal). */",
-    "void hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
-    "void hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+    ...(uart
+      ? BUS_SEAM.UART.decl
+      : [
+          "void hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+          "void hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+        ]),
     "void hal_delay_ms (uint32_t ms);",
     "",
     "/* Driver handle. */",
     "typedef struct {",
-    "    uint8_t i2c_addr;",
+    uart ? BUS_SEAM.UART.handleField : "    uint8_t i2c_addr;",
     `} ${type};`,
     "",
     "/* Public API. */",
@@ -395,38 +473,46 @@ function commandDriver(
     "    if (dev == NULL) {",
     "        return -1;",
     "    }",
-    `    dev->i2c_addr = ${prefix}_I2C_ADDR;`,
+    ...(uart ? [] : [`    dev->i2c_addr = ${prefix}_I2C_ADDR;`]),
     "    /* TODO(driverge): power-up / soft-reset sequence and startup delay. See",
     "     * fill_in_brief.init_sequence_todo. */",
     "    return 0;",
     "}",
     "",
     `int ${name}_send_command(${type} *dev, uint16_t command) {`,
-    "    uint8_t msb;",
-    "    uint8_t lsb;",
-    "    if (dev == NULL) {",
-    "        return -1;",
-    "    }",
-    "    msb = (uint8_t)(command >> 8);",
-    "    lsb = (uint8_t)(command & 0xFF);",
-    "    /* Command frame = [MSB][LSB]. hal_i2c_write emits the reg byte then the",
-    "     * data bytes, so MSB-as-reg + LSB-as-data yields the correct 2-byte frame. */",
-    "    hal_i2c_write(dev->i2c_addr, msb, &lsb, 1);",
-    "    return 0;",
+    ...(uart
+      ? uartFramingBody(["dev", "command"])
+      : [
+          "    uint8_t msb;",
+          "    uint8_t lsb;",
+          "    if (dev == NULL) {",
+          "        return -1;",
+          "    }",
+          "    msb = (uint8_t)(command >> 8);",
+          "    lsb = (uint8_t)(command & 0xFF);",
+          "    /* Command frame = [MSB][LSB]. hal_i2c_write emits the reg byte then the",
+          "     * data bytes, so MSB-as-reg + LSB-as-data yields the correct 2-byte frame. */",
+          "    hal_i2c_write(dev->i2c_addr, msb, &lsb, 1);",
+          "    return 0;",
+        ]),
     "}",
     "",
     `int ${name}_read_data(${type} *dev, uint8_t *buffer, uint16_t len) {`,
-    "    if (dev == NULL || buffer == NULL) {",
-    "        return -1;",
-    "    }",
-    "    /* TODO(driverge): read `len` response bytes (data words each followed by a",
-    "     * CRC byte). Most command-set parts use a plain I2C read with no pointer",
-    "     * byte — adapt the HAL call to your platform, then check each word with",
-    `     * ${name}_crc8(). See fill_in_brief.quirks_todo. */`,
-    "    (void)dev;",
-    "    (void)buffer;",
-    "    (void)len;",
-    "    return 0;",
+    ...(uart
+      ? uartFramingBody(["dev", "buffer", "len"])
+      : [
+          "    if (dev == NULL || buffer == NULL) {",
+          "        return -1;",
+          "    }",
+          "    /* TODO(driverge): read `len` response bytes (data words each followed by a",
+          "     * CRC byte). Most command-set parts use a plain I2C read with no pointer",
+          "     * byte — adapt the HAL call to your platform, then check each word with",
+          `     * ${name}_crc8(). See fill_in_brief.quirks_todo. */`,
+          "    (void)dev;",
+          "    (void)buffer;",
+          "    (void)len;",
+          "    return 0;",
+        ]),
     "}",
     "",
   ];
@@ -447,7 +533,9 @@ function commandDriver(
 
   const brief: FillInBrief = {
     init_sequence_todo: `Determine the power-up / soft-reset sequence and any startup delay for ${json.metadata.part || "the device"}.`,
-    quirks_todo: `Implement ${name}_read_data for this part's actual read framing (clock stretching vs. fixed delay, number of data+CRC words per command) using the driverge://datasheet resource.`,
+    quirks_todo: uart
+      ? `Verify the response checksum algorithm from the datasheet before trusting ${name}_read_data's output — vendor checksum/CRC methods vary by part.`
+      : `Implement ${name}_read_data for this part's actual read framing (clock stretching vs. fixed delay, number of data+CRC words per command) using the driverge://datasheet resource.`,
     doc_todo: "Add Doxygen comments for all public functions and document each command's response layout.",
   };
   if (crc) {
@@ -455,6 +543,9 @@ function commandDriver(
   }
   if (commands.length === 0) {
     brief.command_set_todo = `Enumerate ${json.metadata.part || name}'s command set from the datasheet — Driverge could not auto-extract it. Add a "#define ${prefix}_CMD_<NAME> 0x.." for each command using the driverge://datasheet resource.`;
+  }
+  if (uart) {
+    brief.framing_todo = `Implement ${name}'s UART frame protocol in send_command/read_data: build request frames with hal_uart_write and parse responses with hal_uart_read, per the datasheet's communication/frame-format section.`;
   }
 
   return { files: makeFiles(name, header, source), fill_in_brief: brief };
