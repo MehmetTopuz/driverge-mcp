@@ -28,6 +28,55 @@ describe("extractProtocol", () => {
     expect(p.bus).toBe("SPI");
     expect(p.addresses).toBeUndefined();
   });
+
+  // Phase A (evidenced quality fix): pdfjs splits the "I²C" superscript into
+  // separate tokens, so a page's normalized text reads "I 2 C" instead of
+  // "I2C"/"I²C". The bus regex must tolerate a single optional space between
+  // I/2/C, and address extraction (gated on bus === "I2C") must fire the same
+  // way it does for the plain-text form. Real case: dual-variant sheets like
+  // MCP23017 (I2C) / MCP23S17 (SPI) render the I2C variant's mark this way.
+  it("detects a token-split 'I 2 C' bus (pdfjs superscript split) and gates address extraction the same way", () => {
+    const p = extractProtocol([
+      page("The I 2 C interface supports fast mode. The I 2 C address is 0x20 by default."),
+    ]);
+    expect(p.bus).toBe("I2C");
+    expect(p.addresses).toEqual(["0x20"]);
+  });
+
+  // The MCP23017/MCP23S17 dual-variant scenario: the same sheet documents both
+  // the I2C part (rendered token-split) and the SPI part. I2C must win — this
+  // is the actual scorecard bug (bus reported as SPI for an I2C part).
+  it("prefers I2C when a token-split 'I 2 C' AND a plain 'SPI' both appear on the sheet (MCP23017/MCP23S17 scenario)", () => {
+    const p = extractProtocol([
+      page(
+        "This family is offered in two interface variants: the MCP23017 with an I 2 C interface, " +
+          "and the MCP23S17 with an SPI interface.",
+      ),
+    ]);
+    expect(p.bus).toBe("I2C");
+  });
+
+  // Negative guard: the token-split regex must stay anchored with a trailing
+  // word boundary on C, or it will overmatch text like "I 2 CHANNELS" (C is
+  // immediately followed by more letters, not a word boundary). No other bus
+  // keyword appears here, so a correct implementation reports "unknown".
+  it("does not false-positive on 'I 2 CHANNELS' — C directly followed by letters is not a word boundary", () => {
+    const p = extractProtocol([
+      page("See APPENDIX I 2 CHANNELS for the full pin list of this device."),
+    ]);
+    expect(p.bus).toBe("unknown");
+  });
+
+  // Regression pins for the literal (non-split) forms the token-split fix must
+  // not disturb: plain "I2C", unicode "I²C", plain "SPI", and Infineon "SPC".
+  it("still detects bus from plain 'I2C', unicode 'I²C', plain 'SPI', and Infineon 'SPC' (regression pins)", () => {
+    expect(extractProtocol([page("Uses I2C for communication.")]).bus).toBe("I2C");
+    expect(extractProtocol([page("The 7-bit I²C device address is 0x38.")]).bus).toBe("I2C");
+    expect(extractProtocol([page("The device communicates via SPI only.")]).bus).toBe("SPI");
+    expect(extractProtocol([page("Sensor uses an SPC synchronous serial interface.")]).bus).toBe(
+      "SPI",
+    );
+  });
 });
 
 describe("extractCrc", () => {

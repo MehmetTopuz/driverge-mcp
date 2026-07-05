@@ -17,6 +17,28 @@ describe("detectPart", () => {
   it("returns empty when no known part token is present", () => {
     expect(detectPart([page("A generic widget with no recognizable part number")])).toBe("");
   });
+
+  // Phase A (evidenced quality fix): the scorecard shows part "—" for
+  // vl53l3cx.pdf — PART_PATTERNS has no entry for ST's VL53 ToF family, so
+  // detectPart falls back to "" and the slug falls back to "device".
+  it("detects the ST VL53 ToF family (VL53L3CX, VL53L1X)", () => {
+    expect(
+      detectPart([
+        page(
+          "The VL53L3CX is a Time-of-Flight ranging sensor. VL53L3CX is available in a small " +
+            "package. VL53L3CX register map follows.",
+        ),
+      ]),
+    ).toBe("VL53L3CX");
+    expect(
+      detectPart([
+        page(
+          "The VL53L1X is a Time-of-Flight ranging sensor. VL53L1X is available in a small " +
+            "package. VL53L1X register map follows.",
+        ),
+      ]),
+    ).toBe("VL53L1X");
+  });
 });
 
 const TMAG = fileURLToPath(new URL("../fixtures/tmag5170-q1.pdf", import.meta.url));

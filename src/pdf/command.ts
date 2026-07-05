@@ -31,7 +31,10 @@ export function extractProtocol(pages: PageContent[]): Protocol {
   const text = joinText(pages);
   // SSC/SPC are Infineon's SPI-family serial names (e.g. TLE5014), so treat them
   // as SPI when neither I2C nor a plain "SPI" mention is present.
-  const bus: Protocol["bus"] = /\bI(?:2|²)C\b/i.test(text)
+  // pdfjs renders the "I²C" superscript as separate tokens ("I 2 C"), so a
+  // single optional space is tolerated between I/2/C. The trailing \b is kept
+  // so "I 2 CHANNELS" (C directly followed by more letters) does not match.
+  const bus: Protocol["bus"] = /\bI\s?(?:2|²)\s?C\b/i.test(text)
     ? "I2C"
     : /\bSPI\b|\bSSC\b|\bSPC\b/.test(text)
       ? "SPI"
