@@ -22,6 +22,10 @@ const FIXTURES = [
   "infineon-tle5014sp16d-e0002-datasheet-en.pdf",
   "lsm6dsrx.pdf",
   "vl53l3cx.pdf",
+  "adxl345.pdf",
+  "pca9685.pdf",
+  "mlx90614.pdf",
+  "max30102.pdf",
 ] as const;
 
 const fixturePath = (f: string) =>
