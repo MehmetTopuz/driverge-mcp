@@ -49,13 +49,36 @@ export function extractProtocol(pages: PageContent[]): Protocol {
   // (e.g. "connect via a TTL serial debug adapter"), so resolving this tier
   // before I2C/SPI would misclassify those parts. UART has no bus device
   // address, so — like SPI — address extraction stays gated on I2C only below.
+  //
+  // Session C — CAN tier. Sits AFTER I2C/SPI/UART for the same multi-interface-
+  // sheet reason as UART above. "CAN" is unusual among these bus keywords: it is
+  // ALSO a common English modal verb ("the sensor CAN operate in low power
+  // mode"), so a bare case-insensitive match would false-positive constantly.
+  // Detection therefore needs two tiers of its own: an explicit phrase ("CAN
+  // bus", "CAN 2.0[AB]", "CAN FD") is unambiguous on its own; short of that, a
+  // literal uppercase "CAN" (case-SENSITIVE — the modal verb is virtually never
+  // written in all-caps in running prose) must co-occur with vocabulary that is
+  // unique to the CAN protocol (arbitration, DLC, "CAN controller", an
+  // acceptance filter) before it resolves. Like UART, CAN has no universal
+  // register-access primitive on the wire (CANopen SDO / J1939 PGN / raw
+  // message-ID schemes are all device-specific), so address extraction stays
+  // gated on I2C only below.
+  const CAN_PHRASE = /\bCAN\s?(?:bus|2\.0[AB]?|FD)\b/i;
+  const CAN_VOCAB =
+    /\barbitration\b/i.test(text) ||
+    /\bDLC\b/.test(text) ||
+    /\bCAN\s+controller\b/i.test(text) ||
+    /\bacceptance\s+filter/i.test(text);
+
   const bus: Protocol["bus"] = /\bI\s?(?:2|²)\s?C\b/i.test(text) || /\bSMBus\b/i.test(text)
     ? "I2C"
     : /\bSPI\b|\bSSC\b|\bSPC\b/.test(text)
       ? "SPI"
       : /\bUART\b/.test(text) || /\bRS-?(?:232|485)\b/i.test(text) || /\bTTL\s+serial\b/i.test(text)
         ? "UART"
-        : "unknown";
+        : CAN_PHRASE.test(text) || (/\bCAN\b/.test(text) && CAN_VOCAB)
+          ? "CAN"
+          : "unknown";
 
   const addresses: string[] = [];
   // Only I2C has a bus device address. Scanning for "0xNN near 'address'" on an
