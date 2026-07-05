@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { analyzePdfFile } from "../../src/pdf/analyze";
 import { assembleDatasheet } from "../../src/schema/assemble";
-import type { PageContent, PdfAnalysis } from "../../src/pdf/types";
+import type { PageContent, PdfAnalysis, PositionedText } from "../../src/pdf/types";
 
 const bme280 = fileURLToPath(new URL("../fixtures/bst-bme280-ds002.pdf", import.meta.url));
 const sht3x = fileURLToPath(new URL("../fixtures/sht3x-datasheet.pdf", import.meta.url));
@@ -111,5 +111,74 @@ describe("assembleDatasheet — opts.manufacturerHint (F1)", () => {
     expect(json.metadata.manufacturer).toBe("Bosch Sensortec");
     expect(json.metadata.manufacturer).not.toBe("Should Be Ignored");
     expect(json.metadata.manufacturerConfidence).toBe(baseline.metadata.manufacturerConfidence);
+  });
+});
+
+// --- Session 11 / Phase D — Maxim register-matrix adapter wiring (RED) ------
+//
+// buildInterface's fallback chain gains a new slot: findMaximRegisterMap, tried
+// after findTiRegisterMap and before findGenericRegisterTable (mirrors how
+// findTiRegisterMap itself is wired in). This is a minimal end-to-end pin that
+// the chain actually reaches the new adapter through assembleDatasheet — the
+// fixture-level golden (max30102-golden.test.ts) carries the full weight.
+//
+// The synthetic page below is shaped like Maxim's register-matrix table
+// ("REGISTER | B7..B0 | REG ADDR | POR STATE | R/W", header stacked across two
+// lines) and is NOT parseable by findRegisterTable (BME280/Microchip) or
+// findTiRegisterMap (TI's Offset/Acronym summary shape). A multi-bit field
+// (msb > lsb) is asserted specifically because findGenericRegisterTable — the
+// adapter this one is slotted BEFORE — never produces bit fields (always `[]`),
+// so seeing one here proves the Maxim adapter, not the generic fallback, is
+// what produced this result.
+const maximT = (str: string, x: number, width: number, y: number): PositionedText => ({
+  str,
+  x,
+  y,
+  width,
+  height: 10,
+});
+
+function maximShapedPage(): PageContent {
+  const items: PositionedText[] = [
+    // Header, band-split across two lines (REG/ADDR and POR/STATE stacked).
+    maximT("REGISTER", 40, 70, 100),
+    maximT("B7", 140, 16, 100),
+    maximT("B6", 160, 16, 100),
+    maximT("B5", 180, 16, 100),
+    maximT("B4", 200, 16, 100),
+    maximT("B3", 220, 16, 100),
+    maximT("B2", 240, 16, 100),
+    maximT("B1", 260, 16, 100),
+    maximT("B0", 280, 16, 100),
+    maximT("REG", 310, 30, 100),
+    maximT("POR", 350, 30, 100),
+    maximT("R/W", 390, 24, 100),
+    maximT("ADDR", 310, 30, 93),
+    maximT("STATE", 350, 30, 93),
+    // "Mode Configuration" (0x09): bare SHDN/RESET + a MODE[2:0] span
+    // geometrically centered across B2..B0.
+    maximT("MODE CONFIG", 40, 80, 70),
+    maximT("SHDN", 133, 30, 70),
+    maximT("RESET", 153, 30, 70),
+    maximT("MODE[2:0]", 238, 60, 70),
+    maximT("0x09", 310, 30, 70),
+    maximT("0x00", 350, 30, 70),
+  ];
+  return { index: 9, text: "", items, hasImage: false };
+}
+
+describe("assembleDatasheet — buildInterface reaches findMaximRegisterMap (Phase D wiring)", () => {
+  it("flows a Maxim register-matrix page through into interface.registers with a real bit field", () => {
+    const analysis = analysisOf([maximShapedPage()]);
+    const json = assembleDatasheet(analysis);
+    expect(json.interface.kind).toBe("register_map");
+    if (json.interface.kind !== "register_map") return;
+    const modeConfig = json.interface.registers.find((r) => r.name === "MODE CONFIG");
+    expect(modeConfig?.address).toBe("0x09");
+    expect(modeConfig?.bitFields).toContainEqual({ name: "MODE", msb: 2, lsb: 0 });
+    // Proves a specialized adapter (not the bitField-less generic fallback) fired.
+    expect(json.interface.registers.some((r) => r.bitFields.some((bf) => bf.msb > bf.lsb))).toBe(
+      true,
+    );
   });
 });

@@ -1,0 +1,13 @@
+{
+  "part": "MLX90614",
+  "sourcePage": 12,
+  "registers": [
+    { "name": "To max", "address": "0x00", "reset": "", "bitFields": [] },
+    { "name": "To min", "address": "0x01", "reset": "", "bitFields": [] },
+    { "name": "PWMCTRL", "address": "0x02", "reset": "", "bitFields": [] },
+    { "name": "Ta range", "address": "0x03", "reset": "", "bitFields": [] },
+    { "name": "Emissivity", "address": "0x04", "reset": "", "bitFields": [] },
+    { "name": "Config Register1", "address": "0x05", "reset": "", "bitFields": [] },
+    { "name": "Melexis reserved", "address": "0x06", "reset": "", "bitFields": [] }
+  ]
+}

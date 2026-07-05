@@ -8,6 +8,7 @@ import { extractCommands, extractProtocol } from "../pdf/command.js";
 import { findGenericRegisterTable } from "../pdf/generic-register-table.js";
 import { detectInterfaceKind, detectSections } from "../pdf/interface-kind.js";
 import { detectManufacturer } from "../pdf/manufacturer.js";
+import { findMaximRegisterMap } from "../pdf/maxim-register-map.js";
 import { detectPart } from "../pdf/part.js";
 import { extractProseCommands } from "../pdf/prose-commands.js";
 import { findRegisterTable } from "../pdf/register-table.js";
@@ -31,6 +32,12 @@ function buildInterface(pages: PageContent[], kind: string): DeviceInterface {
   let registers = findRegisterTable(pages)?.registers ?? [];
   if (registers.length === 0) {
     registers = findTiRegisterMap(pages)?.registers ?? [];
+  }
+  // Maxim's register-matrix shape (see maxim-register-map): tried after TI's
+  // summary-table adapter and before the role-based generic fallback, same
+  // slot pattern as every prior specialized adapter in this chain.
+  if (registers.length === 0) {
+    registers = findMaximRegisterMap(pages)?.registers ?? [];
   }
   if (registers.length === 0) {
     registers = findGenericRegisterTable(pages)?.registers ?? [];

@@ -8,6 +8,7 @@ export { analyzePdf, analyzePdfFile } from "./analyze.js";
 export { centerX, clusterRows, type TableRow } from "./table.js";
 export { findRegisterTable, parseRegisterTable } from "./register-table.js";
 export { findTiRegisterMap, parseTiRegisterMap } from "./ti-register-map.js";
+export { findMaximRegisterMap, parseMaximRegisterMap } from "./maxim-register-map.js";
 export { detectManufacturer } from "./manufacturer.js";
 export { detectPart } from "./part.js";
 export { detectInterfaceKind } from "./interface-kind.js";
