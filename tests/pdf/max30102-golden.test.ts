@@ -3,45 +3,65 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { analyzePdfFile } from "../../src/pdf/analyze";
 import { assembleDatasheet } from "../../src/schema/assemble";
+import golden from "../fixtures/max30102.golden.json";
 
-// RED (Session 11 / Phase D) — fixture-gated pin for the MAX30102 (Maxim)
-// register-matrix table ("Register Maps and Descriptions", pages 10-22: REGISTER
-// | B7..B0 | REG ADDR | POR STATE | R/W). Skips on a clone lacking the
-// git-ignored fixture PDF (see tests/fixtures/README.md).
+// Hand-verified L0 contract for the MAX30102 (Maxim) register-matrix table
+// ("Register Maps and Descriptions", pages 10-22: REGISTER | B7..B0 | REG ADDR
+// | POR STATE | R/W). Skips on a clone lacking the git-ignored fixture PDF
+// (see tests/fixtures/README.md).
 //
-// Today (before findMaximRegisterMap exists and is wired into
-// buildInterface/assemble.ts) this whole pipeline yields 0 registers and a
-// `deferred` extraction status — see tests/scorecard/scorecard.snap.md's
-// max30102.pdf row. This test pins the FLOOR the new adapter must clear:
-// >= 8 registers, at least one multi-bit field, and a non-`none` extraction
-// status. It intentionally does NOT pin exact register names/addresses/bit
-// positions yet — the byte-exact golden JSON (mirroring bme280.golden.json /
-// tmag5170.golden.json) gets committed in a follow-up RED once the adapter is
-// GREEN on this floor and its real output can be hand-verified against the
-// datasheet.
+// This golden took three RED->GREEN rounds against the same fixture (Session
+// 11 / Phase D) — worth a note here since each mistake was specific enough to
+// regress silently if the contract were ever loosened back to a floor check:
+//   1. floor only (>= 8 registers, a multi-bit field, non-`none` status) —
+//      true before findMaximRegisterMap existed at all.
+//   2. once wired in, a hand spot-check against the datasheet (cross-checked
+//      via `pdftotext -layout` and the raw pdfjs positioned-text items) found
+//      the adapter scanned only the FIRST register-recap header band per
+//      page, silently dropping every register after the first section on any
+//      page carrying two (0x04-0x07, 0x0A, 0x12, 0xFE, 0xFF were all
+//      missing), plus a mis-folded TINT[7:0] (collapsed to a single bit) and
+//      a truncated A_FULL_EN (kept only the middle fragment, "FULL_").
+//   3. once those were fixed, three register *names* were still garbage —
+//      "SpO 2" (the subscript "2" joined with a spurious space, and the
+//      "Configuration" line dropped for sitting just past the wrap gap), and
+//      "Multi-LED" / "Registers" as two different half-names for what is
+//      really one Multi-LED Mode Control Registers section spanning both
+//      0x11 and 0x12. These weren't cosmetic: a bad register name leaks
+//      straight into generated macro names (a bare "Registers" becomes
+//      MAX30102_REGISTERS_SLOT4_MASK).
 const FIXTURE = fileURLToPath(new URL("../fixtures/max30102.pdf", import.meta.url));
 
-describe.skipIf(!existsSync(FIXTURE))("MAX30102 (Maxim) register-matrix extraction", () => {
-  it("extracts a real register map via the Maxim adapter (not 0/deferred)", async () => {
-    const analysis = await analyzePdfFile(FIXTURE);
-    const json = assembleDatasheet(analysis);
+describe.skipIf(!existsSync(FIXTURE))("MAX30102 golden register map", () => {
+  it("assembled datasheet matches the committed golden JSON", async () => {
+    const json = assembleDatasheet(await analyzePdfFile(FIXTURE));
+    expect(json).toEqual(golden);
+  });
 
+  it("extraction is complete with the three hand-verified name fixes and no leftover RESERVED rows", async () => {
+    const json = assembleDatasheet(await analyzePdfFile(FIXTURE));
+
+    expect(json.extraction?.status).toBe("complete");
     expect(json.interface.kind).toBe("register_map");
-    if (json.interface.kind !== "register_map") return;
+    if (json.interface.kind !== "register_map") {
+      throw new Error("expected register_map interface");
+    }
 
-    // Today: 0. The datasheet lists 19+ addressable registers (0x00-0x21, 0xFE,
-    // 0xFF) across Interrupt Status/Enable, FIFO, Configuration, Temperature and
-    // Part ID — >= 8 is a conservative floor, not the final count.
-    expect(json.interface.registers.length).toBeGreaterThanOrEqual(8);
+    const registers = json.interface.registers;
+    expect(registers.length).toBe(20);
 
-    // At least one register (e.g. Mode Configuration's MODE[2:0], or SpO2
-    // Configuration's SPO2_ADC_RGE[1:0]/SPO2_SR[2:0]) must carry a real
-    // multi-bit span, not just address-only rows.
-    const hasMultiBitField = json.interface.registers.some((r) =>
-      r.bitFields.some((bf) => bf.msb > bf.lsb),
-    );
-    expect(hasMultiBitField).toBe(true);
+    const byAddress = (address: string) => registers.find((r) => r.address === address);
 
-    expect(["complete", "partial"]).toContain(json.extraction?.status);
+    // SpO2 Configuration (0x0A): the split "SpO" + "2" token is joined
+    // without an inserted space, and the second title line survives.
+    expect(byAddress("0x0A")?.name).toBe("SpO2 Configuration");
+
+    // Multi-LED Mode Control Registers (0x11/0x12): the 3-line shared title
+    // now folds identically onto both sibling addresses.
+    expect(byAddress("0x11")?.name).toBe("Multi-LED Mode Control Registers");
+    expect(byAddress("0x12")?.name).toBe("Multi-LED Mode Control Registers");
+
+    // No RESERVED filler rows (mangled range addresses) ever escape.
+    expect(registers.some((r) => /^reserved$/i.test(r.name))).toBe(false);
   });
 });

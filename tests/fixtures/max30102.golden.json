@@ -1,0 +1,336 @@
+{
+  "metadata": {
+    "part": "MAX30102",
+    "manufacturer": "Maxim Integrated",
+    "manufacturerConfidence": 1,
+    "pdfType": "text_based",
+    "pageCount": 32
+  },
+  "protocol": {
+    "bus": "I2C"
+  },
+  "interface": {
+    "kind": "register_map",
+    "registers": [
+      {
+        "name": "Interrupt Status 1",
+        "address": "0x00",
+        "reset": "0X00",
+        "bitFields": [
+          {
+            "name": "A_FULL",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "PPG_RDY",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "ALC_OVF",
+            "msb": 5,
+            "lsb": 5
+          },
+          {
+            "name": "PWR_RDY",
+            "msb": 0,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "Interrupt Status 2",
+        "address": "0x01",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "DIE_TEMP_RDY",
+            "msb": 1,
+            "lsb": 1
+          }
+        ]
+      },
+      {
+        "name": "Interrupt Enable 1",
+        "address": "0x02",
+        "reset": "0X00",
+        "bitFields": [
+          {
+            "name": "A_FULL_EN",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "PPG_RDY_EN",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "ALC_OVF_EN",
+            "msb": 5,
+            "lsb": 5
+          }
+        ]
+      },
+      {
+        "name": "Interrupt Enable 2",
+        "address": "0x03",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "DIE_TEMP_RDY_EN",
+            "msb": 1,
+            "lsb": 1
+          }
+        ]
+      },
+      {
+        "name": "Die Temp Integer",
+        "address": "0x1F",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "TINT",
+            "msb": 7,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "Die Temp Fraction",
+        "address": "0x20",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "TFRAC",
+            "msb": 3,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "Die Temperature Config",
+        "address": "0x21",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "TEMP_EN",
+            "msb": 0,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "Revision ID",
+        "address": "0xFE",
+        "reset": "0xXX*",
+        "bitFields": [
+          {
+            "name": "REV_ID",
+            "msb": 7,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "Part ID",
+        "address": "0xFF",
+        "reset": "0x15",
+        "bitFields": [
+          {
+            "name": "PART_ID",
+            "msb": 7,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "FIFO Write Pointer",
+        "address": "0x04",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "FIFO_WR_PTR",
+            "msb": 4,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "Over Flow Counter",
+        "address": "0x05",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "OVF_COUNTER",
+            "msb": 4,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "FIFO Read Pointer",
+        "address": "0x06",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "FIFO_RD_PTR",
+            "msb": 4,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "FIFO Data Register",
+        "address": "0x07",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "FIFO_DATA",
+            "msb": 7,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "FIFO Configuration",
+        "address": "0x08",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "SMP_AVE",
+            "msb": 7,
+            "lsb": 5
+          },
+          {
+            "name": "FIFO_ROLLOVER_EN",
+            "msb": 4,
+            "lsb": 4
+          },
+          {
+            "name": "FIFO_A_FULL",
+            "msb": 3,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "Mode Configuration",
+        "address": "0x09",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "SHDN",
+            "msb": 7,
+            "lsb": 7
+          },
+          {
+            "name": "RESET",
+            "msb": 6,
+            "lsb": 6
+          },
+          {
+            "name": "MODE",
+            "msb": 2,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "SpO2 Configuration",
+        "address": "0x0A",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "SPO2_ADC_RGE",
+            "msb": 6,
+            "lsb": 5
+          },
+          {
+            "name": "SPO2_SR",
+            "msb": 4,
+            "lsb": 2
+          },
+          {
+            "name": "LED_PW",
+            "msb": 1,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "LED Pulse Amplitude",
+        "address": "0x0C",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "LED1_PA",
+            "msb": 7,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "LED Pulse Amplitude",
+        "address": "0x0D",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "LED2_PA",
+            "msb": 7,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "Multi-LED Mode Control Registers",
+        "address": "0x11",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "SLOT2",
+            "msb": 6,
+            "lsb": 4
+          },
+          {
+            "name": "SLOT1",
+            "msb": 2,
+            "lsb": 0
+          }
+        ]
+      },
+      {
+        "name": "Multi-LED Mode Control Registers",
+        "address": "0x12",
+        "reset": "0x00",
+        "bitFields": [
+          {
+            "name": "SLOT4",
+            "msb": 6,
+            "lsb": 4
+          },
+          {
+            "name": "SLOT3",
+            "msb": 2,
+            "lsb": 0
+          }
+        ]
+      }
+    ]
+  },
+  "extraction": {
+    "status": "complete",
+    "detectedPages": [
+      10,
+      11,
+      14,
+      32
+    ]
+  },
+  "validation": {
+    "valid": true,
+    "errors": [],
+    "warnings": []
+  }
+}

@@ -14,4 +14,4 @@
 | adxl345.pdf | ADXL345 | Analog Devices | register_map | I2C | 30 | 0 | 0 | partial | yes |
 | pca9685.pdf | PCA9685 | NXP | register_map | I2C | 0 | 0 | 0 | deferred | yes |
 | mlx90614.pdf | MLX90614 | Melexis | register_map | I2C | 7 | 0 | 0 | partial | yes |
-| max30102.pdf | MAX30102 | Maxim Integrated | register_map | I2C | 14 | 22 | 0 | complete | yes |
+| max30102.pdf | MAX30102 | Maxim Integrated | register_map | I2C | 20 | 33 | 0 | complete | yes |
