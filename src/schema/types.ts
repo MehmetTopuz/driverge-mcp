@@ -6,7 +6,7 @@
 
 import type { PdfType, Register } from "../pdf/types.js";
 
-export type Bus = "I2C" | "SPI" | "UART" | "unknown";
+export type Bus = "I2C" | "SPI" | "UART" | "CAN" | "unknown";
 
 export interface DatasheetMetadata {
   part: string;

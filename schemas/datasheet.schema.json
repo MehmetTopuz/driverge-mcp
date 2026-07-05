@@ -24,7 +24,7 @@
       "required": ["bus"],
       "additionalProperties": false,
       "properties": {
-        "bus": { "enum": ["I2C", "SPI", "UART", "unknown"] },
+        "bus": { "enum": ["I2C", "SPI", "UART", "CAN", "unknown"] },
         "addresses": { "type": "array", "items": { "type": "string" } },
         "maxClockHz": { "type": "number", "minimum": 0 }
       }
