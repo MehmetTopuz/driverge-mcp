@@ -153,7 +153,11 @@ describe("Driverge MCP surface", () => {
     ]);
   });
 
-  it("generate_driver refuses a SPI part on a native I2C-only target (esp32) cleanly (B1 regression pin)", async () => {
+  // Session A: esp32/stm32 gained native SPI support, so a SPI part is no
+  // longer refused — it now succeeds (see positive pin below). The B1 pin
+  // moves to a genuinely unsupported bus (UART/unknown), mirroring the
+  // describe.each(["UART", "unknown"]) pattern in tests/codegen/esp32.test.ts.
+  it("generate_driver renders the esp32 target for a SPI part (native SPI support, Session A)", async () => {
     const spiRef = "ds_test_bme280_spi";
     putDatasheet({
       ref: spiRef,
@@ -165,12 +169,34 @@ describe("Driverge MCP surface", () => {
       name: "generate_driver",
       arguments: { ref: spiRef, target: "esp32" },
     });
-    expect((result as ToolResult).isError).toBe(true);
-    expect(firstText(result)).toMatch(/SPI/);
-    expect(firstText(result)).toMatch(/portable/);
-    // No raw stack leak — same standard the server already holds for other rejections.
-    expect(firstText(result)).not.toMatch(/at Object\.|node_modules/);
+    expect((result as ToolResult).isError).toBeFalsy();
+    const artifact = JSON.parse(firstText(result));
+    expect(artifact.files.map((f: { path: string }) => f.path)).toContain("bme280_hal_esp32.c");
   });
+
+  describe.each(["UART", "unknown"] as const)(
+    "generate_driver refuses a bus a native target (esp32) doesn't support (%s)",
+    (bus) => {
+      it(`rejects ${bus} cleanly (B1 regression pin)`, async () => {
+        const ref = `ds_test_bme280_${bus.toLowerCase()}`;
+        putDatasheet({
+          ref,
+          pdfPath: `/x/bme280-${bus.toLowerCase()}.pdf`,
+          json: { ...validJson, protocol: { ...validJson.protocol, bus } },
+        });
+        const client = await connectClient();
+        const result = await client.callTool({
+          name: "generate_driver",
+          arguments: { ref, target: "esp32" },
+        });
+        expect((result as ToolResult).isError).toBe(true);
+        expect(firstText(result)).toMatch(new RegExp(bus, "i"));
+        expect(firstText(result)).toMatch(/portable/);
+        // No raw stack leak — same standard the server already holds for other rejections.
+        expect(firstText(result)).not.toMatch(/at Object\.|node_modules/);
+      });
+    },
+  );
 
   it("generate_driver rejects a not-yet-supported native target (arduino)", async () => {
     const client = await connectClient();
