@@ -11,7 +11,7 @@
 | infineon-tle5014sp16d-e0002-datasheet-en.pdf | TLE5014SP16D | Infineon | register_map | SPI | 0 | 0 | 0 | deferred | yes |
 | lsm6dsrx.pdf | LSM6DSRX | STMicroelectronics | register_map | I2C | 31 | 91 | 0 | complete | yes |
 | vl53l3cx.pdf | VL53L3CX | STMicroelectronics | register_map | I2C | 0 | 0 | 0 | deferred | yes |
-| adxl345.pdf | — | generic | register_map | I2C | 30 | 0 | 0 | partial | yes |
+| adxl345.pdf | ADXL345 | Analog Devices | register_map | I2C | 30 | 0 | 0 | partial | yes |
 | pca9685.pdf | PCA9685 | NXP | register_map | I2C | 0 | 0 | 0 | deferred | yes |
-| mlx90614.pdf | — | generic | register_map | unknown | 7 | 0 | 0 | partial | yes |
-| max30102.pdf | — | generic | register_map | I2C | 0 | 0 | 0 | deferred | yes |
+| mlx90614.pdf | MLX90614 | Melexis | register_map | I2C | 7 | 0 | 0 | partial | yes |
+| max30102.pdf | MAX30102 | Maxim Integrated | register_map | I2C | 0 | 0 | 0 | deferred | yes |

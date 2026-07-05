@@ -40,6 +40,65 @@ describe("detectManufacturer", () => {
     expect(detectManufacturer([page("Broadcom Inc. broadcom.com AEAT-8811-Q24")]).manufacturer).toBe("Broadcom");
     expect(detectManufacturer([page("Infineon Technologies AG www.infineon.com TLE5014")]).manufacturer).toBe("Infineon");
   });
+
+  // Session 11 Phase C — cross-vendor scorecard evidence: adxl345.pdf and
+  // max30102.pdf and mlx90614.pdf all report manufacturer "generic" today
+  // because VENDORS has no Analog Devices, Maxim Integrated, or Melexis entry.
+  describe("cross-vendor Phase C additions (Analog Devices, Maxim Integrated, Melexis)", () => {
+    it("identifies Analog Devices from copyright + domain (ADXL345)", () => {
+      const r = detectManufacturer([
+        page("© Analog Devices, Inc. www.analog.com ADXL345 Digital Accelerometer datasheet."),
+      ]);
+      expect(r.manufacturer).toBe("Analog Devices");
+      expect(r.confidence).toBeGreaterThan(0.5);
+      expect(r.signals).toContain("copyright");
+      expect(r.signals).toContain("url");
+    });
+
+    // Maxim Integrated was acquired by Analog Devices in 2021, but MUST stay a
+    // separate VENDORS entry: Maxim-era sheets (e.g. MAX30102's) carry Maxim
+    // branding, not Analog Devices branding, and merging the two would lose
+    // the "doc-number"/"copyright" strong signal that actually appears on them.
+    it("identifies Maxim Integrated from copyright + domain (MAX30102), kept distinct from Analog Devices", () => {
+      const r = detectManufacturer([
+        page(
+          "© Maxim Integrated Products, Inc. www.maximintegrated.com MAX30102 Pulse Oximeter and Heart-Rate Sensor.",
+        ),
+      ]);
+      expect(r.manufacturer).toBe("Maxim Integrated");
+      expect(r.confidence).toBeGreaterThan(0.5);
+      expect(r.signals).toContain("copyright");
+      expect(r.signals).toContain("url");
+    });
+
+    it("identifies Melexis from copyright + domain (MLX90614)", () => {
+      const r = detectManufacturer([
+        page("© Melexis NV. www.melexis.com MLX90614 Infrared Thermometer datasheet."),
+      ]);
+      expect(r.manufacturer).toBe("Melexis");
+      expect(r.confidence).toBeGreaterThan(0.5);
+      expect(r.signals).toContain("copyright");
+      expect(r.signals).toContain("url");
+    });
+
+    // Guard pin: a lone weak part-prefix signal must stay below MIN_SCORE and
+    // fall back to generic, exactly like the existing MCP23017 guard test.
+    it("falls back to generic on a lone part-prefix for the new vendors (no strong signals)", () => {
+      expect(
+        detectManufacturer([page("The ADXL345 is a small, thin, low-power accelerometer.")])
+          .manufacturer,
+      ).toBe("generic");
+      expect(
+        detectManufacturer([
+          page("MAX30102 integrates pulse oximetry and heart-rate monitor sensors."),
+        ]).manufacturer,
+      ).toBe("generic");
+      expect(
+        detectManufacturer([page("The MLX90614 measures object and ambient temperature.")])
+          .manufacturer,
+      ).toBe("generic");
+    });
+  });
 });
 
 const TMAG = fileURLToPath(

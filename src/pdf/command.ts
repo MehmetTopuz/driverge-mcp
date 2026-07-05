@@ -34,7 +34,13 @@ export function extractProtocol(pages: PageContent[]): Protocol {
   // pdfjs renders the "I²C" superscript as separate tokens ("I 2 C"), so a
   // single optional space is tolerated between I/2/C. The trailing \b is kept
   // so "I 2 CHANNELS" (C directly followed by more letters) does not match.
-  const bus: Protocol["bus"] = /\bI\s?(?:2|²)\s?C\b/i.test(text)
+  // SMBus is folded into this same I2C-tier check (evaluated before the SPI
+  // branch): SMBus is I2C-compatible at the electrical/protocol level, and
+  // sheets that only ever say "SMBus" (e.g. MLX90614) never spell out "I2C",
+  // so without this the bus would wrongly resolve to "unknown". Once bus
+  // resolves "I2C" the existing `if (bus === "I2C")` address gate fires
+  // unchanged — the generated hal_i2c_* seam is correct for SMBus parts.
+  const bus: Protocol["bus"] = /\bI\s?(?:2|²)\s?C\b/i.test(text) || /\bSMBus\b/i.test(text)
     ? "I2C"
     : /\bSPI\b|\bSSC\b|\bSPC\b/.test(text)
       ? "SPI"

@@ -73,6 +73,27 @@ const VENDORS: readonly VendorRule[] = [
     domain: /infineon\.com/i,
     partPrefix: /\b(TLE|TLI|TLV)\d/i,
   },
+  {
+    name: "Analog Devices",
+    copyright: /Analog\s+Devices/i,
+    domain: /analog\.com/i,
+    partPrefix: /\bADXL\d/i,
+  },
+  // Maxim Integrated was acquired by Analog Devices in 2021, but is kept as a
+  // separate VENDORS entry: Maxim-era sheets (e.g. MAX30102's) carry Maxim
+  // branding, not Analog Devices branding — that's the signal that fires.
+  {
+    name: "Maxim Integrated",
+    copyright: /Maxim\s+Integrated/i,
+    domain: /maximintegrated\.com/i,
+    partPrefix: /\bMAX\d{3}/i,
+  },
+  {
+    name: "Melexis",
+    copyright: /Melexis/i,
+    domain: /melexis\.com/i,
+    partPrefix: /\bMLX\d/i,
+  },
 ];
 
 const STRONG = 3;

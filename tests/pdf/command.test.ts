@@ -77,6 +77,36 @@ describe("extractProtocol", () => {
       "SPI",
     );
   });
+
+  // Session 11 Phase C — cross-vendor scorecard evidence: mlx90614.pdf reports
+  // bus "unknown" because its sheet describes the interface as "SMBus" and
+  // never spells out "I2C" (MLX90614 is an I2C-compatible SMBus device), so
+  // codegen would otherwise emit the wrong HAL seam for it. SMBus is a
+  // superset-compatible protocol of I2C, so it must be classified as "I2C".
+  it("classifies a lone SMBus mention (no other bus keyword) as I2C (MLX90614 scenario)", () => {
+    const p = extractProtocol([
+      page("The device communicates using the SMBus protocol for register access."),
+    ]);
+    expect(p.bus).toBe("I2C");
+  });
+
+  it("prefers I2C when SMBus AND a plain 'SPI' both appear on the sheet (same precedence as I2C itself)", () => {
+    const p = extractProtocol([
+      page(
+        "This device supports both SMBus and SPI interface modes; SMBus is the default and " +
+          "SPI is optional for high-speed applications.",
+      ),
+    ]);
+    expect(p.bus).toBe("I2C");
+  });
+
+  it("gates address extraction on SMBus sheets the same way it does for I2C (MLX90614's 0x5A default address)", () => {
+    const p = extractProtocol([
+      page("The device communicates over SMBus. The SMBus address is 0x5A by default."),
+    ]);
+    expect(p.bus).toBe("I2C");
+    expect(p.addresses).toEqual(["0x5A"]);
+  });
 });
 
 describe("extractCrc", () => {

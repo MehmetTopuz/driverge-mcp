@@ -21,6 +21,9 @@ const PART_PATTERNS: readonly RegExp[] = [
   /\bAEAT-?\d{3,4}\b/gi, // AEAT-8811
   /\bTLE\d{4}[A-Z0-9]*\b/gi, // TLE5014, TLE5014SP16D (ordering suffix)
   /\bVL53L\d[A-Z0-9]*\b/gi, // VL53L3CX, VL53L1X (ST ToF)
+  /\bADXL\d{3}\b/gi, // ADXL345
+  /\bMAX\d{4,5}[A-Z]?\b/gi, // MAX30102
+  /\bMLX\d{5}[A-Z]*\b/gi, // MLX90614
 ];
 
 /** The most frequently occurring vendor part token, uppercased; "" if none. */
