@@ -18,8 +18,11 @@ const FORBIDDEN: ReadonlyArray<{ re: RegExp; api: string }> = [
   { re: /\bWire\.\w+|\bSPI\.(?:transfer|begin)\w*/, api: "Arduino" },
 ];
 
-// Allowed thin-HAL seam functions (families).
-const HAL_ALLOWED = /^hal_(?:i2c_(?:read|write)|spi_(?:read|write)|delay_ms)$/;
+// Allowed thin-HAL seam functions (families). SPI is a single combined
+// hal_spi_transfer(tx, tx_len, rx, rx_len) — one call per CS-framed transaction —
+// not a hal_spi_write/hal_spi_read pair; those are retired and must lint as
+// unknown HAL functions (see decisions: thin-hal-non-negotiable).
+const HAL_ALLOWED = /^hal_(?:i2c_(?:read|write)|spi_transfer|delay_ms)$/;
 
 function balanced(text: string, open: string, close: string): boolean {
   let depth = 0;

@@ -49,10 +49,10 @@ export class UnsupportedTargetError extends Error {
 
 /**
  * Thrown by a native target (esp32, stm32) when the datasheet's protocol bus
- * isn't the one its HAL seam implements. The seams reference `${PREFIX}_I2C_ADDR`,
- * a macro the portable core only defines for I2C parts — emitting the seam for a
- * SPI (or unknown-bus) part would produce uncompilable output, so the generator
- * refuses instead. The portable target has no such constraint and still works.
+ * isn't one its HAL seam implements. Native targets implement I2C and SPI seams;
+ * any other bus (UART, unknown) has no seam yet and would produce uncompilable
+ * output, so the generator refuses instead. The portable target has no such
+ * constraint and still works for every bus.
  */
 export class UnsupportedBusError extends Error {
   constructor(
@@ -60,7 +60,7 @@ export class UnsupportedBusError extends Error {
     public readonly bus: string,
   ) {
     super(
-      `codegen target "${target}" supports I2C parts only — this datasheet is ${bus}; use the "portable" target for ${bus} parts`,
+      `codegen target "${target}" does not support ${bus} parts yet — use the "portable" target for ${bus} parts`,
     );
     this.name = "UnsupportedBusError";
   }

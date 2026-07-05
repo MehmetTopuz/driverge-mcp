@@ -1,9 +1,11 @@
 // Portable thin-HAL codegen. Renders a deterministic C driver skeleton from the
 // frozen DatasheetJson: register/command constants, bit-field mask+shift macros,
-// the 5-function thin-HAL seam (and NOTHING platform-specific — see
-// thin-hal-non-negotiable), function stubs, and TODO(driverge) markers at every
-// spot needing host-AI reasoning. Output is reproducible: no timestamps, stable
-// ordering. The host AI fills the brief and re-validates via validate_driver.
+// the per-bus thin-HAL seam (I2C: hal_i2c_read/write + hal_delay_ms; SPI: one
+// combined hal_spi_transfer + hal_delay_ms — see BUS_SEAM below and
+// thin-hal-non-negotiable) and NOTHING platform-specific, function stubs, and
+// TODO(driverge) markers at every spot needing host-AI reasoning. Output is
+// reproducible: no timestamps, stable ordering. The host AI fills the brief and
+// re-validates via validate_driver.
 
 import { registerWidth, type Register } from "../pdf/types.js";
 import type { Command, DatasheetJson } from "../schema/types.js";
@@ -72,6 +74,59 @@ function commandSetTodo(prefix: string, pages: number[]): string[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// bus -> thin-HAL seam registry
+// ---------------------------------------------------------------------------
+//
+// Each supported register_map bus contributes: the seam declaration line(s)
+// (rendered in the header, right below the "Thin-HAL seam" comment), the
+// driver-handle struct field, and the read_register/write_register bodies.
+// hal_delay_ms is common to every bus and stays outside this table. Sessions
+// B/C add UART/CAN rows here — keep each row self-contained so a new bus never
+// touches the others.
+
+type RegisterMapBus = "I2C" | "SPI";
+
+interface BusSeam {
+  /** Lines appended after the "Thin-HAL seam" header comment, in order. */
+  decl: string[];
+  /** Field(s) for the driver handle typedef struct. */
+  handleField: string;
+  /** Body of <name>_read_register (dev, reg, value already in scope). */
+  readBody: string[];
+  /** Body of <name>_write_register (dev, reg, value already in scope). */
+  writeBody: string[];
+}
+
+const BUS_SEAM: Record<RegisterMapBus, BusSeam> = {
+  I2C: {
+    decl: [
+      "void hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+      "void hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+    ],
+    handleField: "    uint8_t i2c_addr;",
+    readBody: ["    hal_i2c_read(dev->i2c_addr, reg, value, 1);"],
+    writeBody: ["    hal_i2c_write(dev->i2c_addr, reg, &value, 1);"],
+  },
+  SPI: {
+    decl: [
+      "/* One call = one CS-framed transaction: CS is asserted, tx_len bytes are",
+      " * clocked out, then rx_len bytes are clocked in, then CS is deasserted.",
+      " * tx/rx may be NULL when their respective length is 0. CS is handled",
+      " * entirely inside hal_spi_transfer — callers never touch it. */",
+      "void hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
+    ],
+    handleField: "    uint8_t _reserved; /* platform CS handled in hal_spi_transfer */",
+    readBody: ["    hal_spi_transfer(&reg, 1, value, 1);"],
+    writeBody: [
+      "    uint8_t frame[2];",
+      "    frame[0] = reg;",
+      "    frame[1] = value;",
+      "    hal_spi_transfer(frame, 2, NULL, 0);",
+    ],
+  },
+};
+
 function bitFieldMacros(prefix: string, registers: Register[]): string[] {
   const lines: string[] = [];
   for (const r of registers) {
@@ -95,6 +150,7 @@ function registerDriver(
   prefix: string,
 ): DriverArtifact {
   const spi = json.protocol.bus === "SPI";
+  const seam = BUS_SEAM[spi ? "SPI" : "I2C"];
   const addr = json.protocol.addresses?.[0];
   const guard = `${prefix}_H`;
   const type = `${name}_t`;
@@ -152,20 +208,12 @@ function registerDriver(
   header.push(
     "",
     "/* Thin-HAL seam — implement these for your platform (see thin-hal). */",
-    ...(spi
-      ? [
-          "void hal_spi_write(uint8_t *data, uint16_t len);",
-          "void hal_spi_read (uint8_t *data, uint16_t len);",
-        ]
-      : [
-          "void hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
-          "void hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
-        ]),
+    ...seam.decl,
     "void hal_delay_ms (uint32_t ms);",
     "",
     "/* Driver handle. */",
     `typedef struct {`,
-    spi ? "    uint8_t _reserved; /* platform CS handled in hal_spi_* */" : "    uint8_t i2c_addr;",
+    seam.handleField,
     `} ${type};`,
     "",
     "/* Public API. */",
@@ -180,12 +228,8 @@ function registerDriver(
     "",
   );
 
-  const readBody = spi
-    ? ["    hal_spi_write(&reg, 1);", "    hal_spi_read(value, 1);"]
-    : ["    hal_i2c_read(dev->i2c_addr, reg, value, 1);"];
-  const writeBody = spi
-    ? ["    uint8_t frame[2];", "    frame[0] = reg;", "    frame[1] = value;", "    hal_spi_write(frame, 2);"]
-    : ["    hal_i2c_write(dev->i2c_addr, reg, &value, 1);"];
+  const readBody = seam.readBody;
+  const writeBody = seam.writeBody;
 
   const source: string[] = [
     `#include "${name}.h"`,
@@ -232,9 +276,17 @@ function registerDriver(
 
 function registerBrief(json: DatasheetJson): FillInBrief {
   const part = json.metadata.part || "the device";
+  const quirks = [
+    `Capture vendor timing/behavior quirks for ${part} (e.g. mandatory power-on delay, soft-reset requirement, read-back constraints) and enforce them in ${slug(part)}_init using hal_delay_ms.`,
+  ];
+  if (json.protocol.bus === "SPI") {
+    quirks.push(
+      "Verify the register address bit convention: many SPI chips set the address MSB for reads (e.g. 0x80 | reg) — check the datasheet's SPI framing and adjust read_register/write_register.",
+    );
+  }
   return {
     init_sequence_todo: `Determine the correct power-on/reset init sequence for ${part}: which registers to write, in what order, with what values (mode/config), and any required startup delay. Read the datasheet init/operation section via the driverge://datasheet resource.`,
-    quirks_todo: `Capture vendor timing/behavior quirks for ${part} (e.g. mandatory power-on delay, soft-reset requirement, read-back constraints) and enforce them in ${slug(part)}_init using hal_delay_ms.`,
+    quirks_todo: quirks.join(" "),
     doc_todo:
       "Add Doxygen comments for all public functions and any device-specific compensation/conversion formulas.",
   };
