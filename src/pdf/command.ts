@@ -40,11 +40,22 @@ export function extractProtocol(pages: PageContent[]): Protocol {
   // so without this the bus would wrongly resolve to "unknown". Once bus
   // resolves "I2C" the existing `if (bus === "I2C")` address gate fires
   // unchanged — the generated hal_i2c_* seam is correct for SMBus parts.
+  // Session B — UART tier. This MUST stay last: multi-interface sheets (e.g. a
+  // part offered in both I2C/SPI and UART variants) list I2C/SPI first-class,
+  // so those tiers get first refusal above. "UART" and its cousins (RS-232/485
+  // are electrically distinct but frame the same way over a UART peripheral;
+  // "TTL serial" is the same asynchronous serial link at logic-level voltages)
+  // also turn up incidentally in appnote/pinout prose on I2C/SPI datasheets
+  // (e.g. "connect via a TTL serial debug adapter"), so resolving this tier
+  // before I2C/SPI would misclassify those parts. UART has no bus device
+  // address, so — like SPI — address extraction stays gated on I2C only below.
   const bus: Protocol["bus"] = /\bI\s?(?:2|²)\s?C\b/i.test(text) || /\bSMBus\b/i.test(text)
     ? "I2C"
     : /\bSPI\b|\bSSC\b|\bSPC\b/.test(text)
       ? "SPI"
-      : "unknown";
+      : /\bUART\b/.test(text) || /\bRS-?(?:232|485)\b/i.test(text) || /\bTTL\s+serial\b/i.test(text)
+        ? "UART"
+        : "unknown";
 
   const addresses: string[] = [];
   // Only I2C has a bus device address. Scanning for "0xNN near 'address'" on an
