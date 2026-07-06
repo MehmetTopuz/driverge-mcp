@@ -40,6 +40,19 @@ export function maskHex(n: number, regWidth = 8): string {
   return `0x${n.toString(16).toUpperCase().padStart(regWidth / 4, "0")}`;
 }
 
+/**
+ * Neutralizes C block-comment delimiters in free text lifted verbatim from a
+ * parsed datasheet (e.g. `metadata.manufacturer`, a `Register.name`) before it
+ * is embedded inside a generated `/* ... *\/` block comment. Without this, text
+ * containing `*\/` closes the enclosing comment early and whatever follows
+ * becomes live, uncommented source — a comment-escape injection (B2). Splits
+ * both delimiters ("* /" and "/ *") so the string can neither close an
+ * existing comment nor open a bogus one; still reads fine as prose either way.
+ */
+export function commentSafe(s: string): string {
+  return s.replace(/\*\//g, "* /").replace(/\/\*/g, "/ *");
+}
+
 /** Macro prefix for a part, e.g. "BME280". */
 export function prefixOf(part: string): string {
   return macro(slug(part));

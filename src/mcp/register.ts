@@ -3,7 +3,7 @@
 // in-memory transport. Contract: wiki mcp-tool-usage-flow.
 
 import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   McpServer,
@@ -83,6 +83,39 @@ const text = (value: unknown, isError = false): TextResult => ({
   ],
   ...(isError ? { isError: true } : {}),
 });
+
+// Matches an absolute Windows path ("C:\..." or "C:/...") even when Node's
+// `path` module resolves in POSIX mode (e.g. tests running on a non-Windows
+// CI). Node's own `isAbsolute()` only recognizes the *current platform's*
+// notion of absolute, so on POSIX it does NOT consider "C:\evil.h" absolute —
+// this regex closes that gap so resolveArtifactPath's containment check is
+// meaningful on every platform, not just Windows (B3).
+const WINDOWS_ABSOLUTE = /^[a-zA-Z]:[\\/]/;
+
+/**
+ * Confines a single artifact file path (`DriverArtifact.files[].path`) under
+ * `rootDir`, returning the resolved absolute path when it is safely inside
+ * `rootDir`, or `undefined` when it escapes (an absolute path — POSIX or
+ * Windows-style — or a relative path that climbs out via `..`). Mirrors the
+ * out_dir escape check in the generate_driver handler below (resolve +
+ * relative + isAbsolute) so both containment checks agree on what "escapes"
+ * means. A nested-but-non-escaping relative path (e.g. "sub/dir/file.h") is
+ * accepted and resolves under rootDir.
+ *
+ * `filePath` is always Driverge's own deterministic codegen output today
+ * (safe), but the generate_driver handler has no other guard if that ever
+ * changes — a hostile/careless datasheet-derived slug, a future codegen bug,
+ * etc. — so this is the second containment check, applied to every file
+ * BEFORE any of them are written (B3).
+ */
+export function resolveArtifactPath(rootDir: string, filePath: string): string | undefined {
+  if (isAbsolute(filePath) || WINDOWS_ABSOLUTE.test(filePath)) return undefined;
+  const resolvedRoot = resolve(rootDir);
+  const target = resolve(resolvedRoot, filePath);
+  const rel = relative(resolvedRoot, target);
+  if (rel.startsWith("..") || isAbsolute(rel)) return undefined;
+  return target;
+}
 
 // The frozen JSON-Schema, shipped alongside dist/ (see package.json "files").
 function loadSchemaText(): string {
@@ -202,8 +235,26 @@ export function registerDrivergeTools(server: McpServer): void {
             true,
           );
         }
+        // B3: a SECOND containment check, this time on each artifact file's
+        // own path — resolveArtifactPath, not a bare join(resolvedOut,
+        // f.path). Every path is validated BEFORE any file is written, so a
+        // single escaping path aborts the whole write with no partial output.
+        const targets: { target: string; content: string }[] = [];
+        for (const f of artifact.files) {
+          const target = resolveArtifactPath(resolvedOut, f.path);
+          if (!target) {
+            return text(
+              `generated file path "${f.path}" escapes the output directory "${resolvedOut}" — refusing to write anything`,
+              true,
+            );
+          }
+          targets.push({ target, content: f.content });
+        }
         mkdirSync(resolvedOut, { recursive: true });
-        for (const f of artifact.files) writeFileSync(join(resolvedOut, f.path), f.content);
+        for (const { target, content } of targets) {
+          mkdirSync(dirname(target), { recursive: true });
+          writeFileSync(target, content);
+        }
       }
       return text(artifact);
     },

@@ -19,7 +19,7 @@
 
 import { registerWidth, type Register } from "../pdf/types.js";
 import type { Command, DatasheetJson } from "../schema/types.js";
-import { macro, pascalCase, slug } from "./ident.js";
+import { commentSafe, macro, pascalCase, slug } from "./ident.js";
 import {
   AUTOGEN,
   BUS_SEAM,
@@ -287,7 +287,13 @@ function commandDriverCpp(
       if (seen.has(macroName)) continue;
       seen.add(macroName);
       const line = `#define ${macroName} ${c.code.toUpperCase().replace("0X", "0x")}`;
-      hpp.push(c.params && c.params.length > 0 ? `${line}  /* params: ${c.params.join(", ")} */` : line);
+      // See the C flavor's identical comment in portable.ts commandDriver — c.params
+      // is defensively commentSafe'd even though today's only producer is hex-safe.
+      hpp.push(
+        c.params && c.params.length > 0
+          ? `${line}  /* params: ${commentSafe(c.params.join(", "))} */`
+          : line,
+      );
     }
   }
 
