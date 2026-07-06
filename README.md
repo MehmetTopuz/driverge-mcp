@@ -72,8 +72,8 @@ deterministically and leaves the reasoning to the AI you already use.
   the same driver skeleton — reviewable, diff-able, and testable, not a one-shot
   black box.
 - **Portable by construction.** One driver core targets any platform through a
-  five-function thin-HAL seam; the native targets (STM32, ESP32) pre-fill that
-  seam for you — switch platforms without touching driver logic.
+  tiny per-bus thin-HAL seam (2–3 functions); the native targets (STM32, ESP32)
+  pre-fill that seam for you — switch platforms without touching driver logic.
 - **The AI does only what it's good at.** Register geometry is deterministic;
   init-sequence ordering, timing quirks, and compensation math need judgment.
   Driverge marks exactly those spots with `TODO(driverge)` and a `fill_in_brief`,
@@ -88,9 +88,9 @@ driver to a different MCU, or just learning an unfamiliar chip's register map.
    (register-map vs. command-set), then extract registers / bit-fields (or
    commands + CRC) and the bus protocol into a **frozen JSON contract**, gated by
    a validator.
-2. **Generate** a driver for a target platform: a deterministic **thin-HAL
-   skeleton** — register/bit-field constants, the five-function thin-HAL seam,
-   function stubs — with every reasoning gap marked `TODO(driverge)` plus a `fill_in_brief`
+2. **Generate** a driver for a target platform, in C or C++: a deterministic
+   **thin-HAL skeleton** — register/bit-field constants, the per-bus thin-HAL
+   seam, function stubs — with every reasoning gap marked `TODO(driverge)` plus a `fill_in_brief`
    telling the host AI exactly what to complete.
 3. **Validate** the completed driver: thin-HAL purity, no leftover TODOs, register
    references exist, bit-field masks match the JSON.
@@ -103,14 +103,17 @@ changes.
 
 | Target | Bus binding | Buses | Language | Status |
 |---|---|---|---|---|
-| **Portable (thin-HAL)** | user-implemented `hal_i2c_*` / `hal_spi_*` / `hal_delay_ms` | I²C + SPI | C | ✅ |
-| **ESP32** | ESP-IDF `i2c_master_*` | I²C only | C | ✅ |
-| **STM32** | CubeHAL `HAL_I2C_Mem_Read/Write` | I²C only | C | ✅ |
+| **Portable (thin-HAL)** | user-implemented `hal_*` seam | I²C, SPI, UART, CAN | C / C++ | ✅ |
+| **ESP32** | ESP-IDF (`i2c_master_*`, `spi_master`, `uart`, TWAI) | I²C, SPI, UART, CAN | C / C++ | ✅ |
+| **STM32** | CubeHAL (`HAL_I2C_*`, `HAL_SPI_*` + GPIO CS, `HAL_UART_*`) | I²C, SPI, UART | C / C++ | ✅ |
 | **Arduino** | `Wire` / `SPI` | — | C++ | planned |
 
-SPI parts work with the **portable** target today; asking the ESP32/STM32
-targets for an SPI part fails fast with a clear `UnsupportedBusError` rather
-than emitting a wrong seam.
+STM32 CAN is planned (the bxCAN/FDCAN family split needs its own pass); asking
+a target for a bus it doesn't support fails fast with a clear
+`UnsupportedBusError` rather than emitting a wrong seam. Pass
+`language: "cpp"` to `generate_driver` for a class-based C++ driver
+(`.hpp`/`.cpp`) instead of the default C output — same registers, same seam,
+same validation.
 
 > ⚠️ **Generated code is a strong draft, not a certified driver.** Init sequences,
 > compensation formulas, and timing quirks are completed by the host AI and
@@ -193,12 +196,23 @@ re-parse, and the full JSON stays readable at `driverge://datasheet/<ref>`.
 
 ### The thin-HAL seam
 
-Generated drivers touch hardware through exactly five functions —
-`hal_i2c_read` / `hal_i2c_write` (or the SPI pair) plus `hal_delay_ms` — and
-nothing else. The driver core is therefore identical across platforms; a native
-target (ESP32, STM32) just pre-fills the seam with the vendor calls.
+Generated drivers touch hardware through a tiny per-bus seam — and nothing
+else:
+
+| Bus | Seam functions (plus `hal_delay_ms`) |
+|---|---|
+| I²C | `hal_i2c_read`, `hal_i2c_write` |
+| SPI | `hal_spi_transfer` (one call = one CS-framed transaction) |
+| UART | `hal_uart_write`, `hal_uart_read` |
+| CAN | `hal_can_transfer` (one call = one frame exchange) |
+
+The driver core is therefore identical across platforms; a native target
+(ESP32, STM32) just pre-fills the seam with the vendor calls.
 `validate_driver` enforces this purity: a driver that calls a vendor peripheral
-API outside the seam fails the lint.
+API outside the seam fails the lint. Buses with no universal register-access
+primitive (UART, CAN) keep the same discipline — the device-specific framing is
+a marked `TODO(driverge)` reasoning gap (`framing_todo`), completed by the host
+AI and then linted.
 
 ### The fill-in loop
 
@@ -305,7 +319,9 @@ Give your MCP client a datasheet and ask it to build a driver. The typical flow:
    `manufacturer_hint` (free text) and `interface_kind_hint`
    (`"register_map"` | `"command_set"`) parameters steer it.
 2. **`generate_driver`** — `{ "ref": "…", "target": "portable" }` → returns the
-   driver files + a `fill_in_brief`. (`out_dir` also writes them to disk.)
+   driver files + a `fill_in_brief`. (`out_dir` also writes them to disk;
+   `language: "cpp"` renders a class-based `.hpp`/`.cpp` driver instead of the
+   default C.)
 3. The host AI completes the `TODO(driverge)` markers using the brief and the
    `driverge://datasheet/<ref>` resource.
 4. **`validate_driver`** — `{ "ref": "…", "files": [...] }` → static checks; loop
@@ -376,9 +392,9 @@ datasheet prose, and `validate_driver` checks the result.
 - **`out_dir "…" escapes the allowed root`.** Disk writes are confined under
   `DRIVERGE_OUT_ROOT` (default: the server's working directory) — see
   [Configuration](#configuration).
-- **`UnsupportedBusError` on ESP32/STM32.** Those targets are I²C-only for
-  now; generate the **portable** target for SPI parts and implement the
-  `hal_spi_*` seam.
+- **`UnsupportedBusError` on a native target.** The target doesn't support that
+  part's bus yet (today that means CAN on STM32, or a bus the parser couldn't
+  identify). Generate the **portable** target instead and implement its seam.
 
 ## Roadmap
 
@@ -386,9 +402,10 @@ datasheet prose, and `validate_driver` checks the result.
   multiple clients. ✅
 - **v0.y** — native targets: ESP32 ✅, STM32 ✅, Arduino (next);
   multi-manufacturer extraction ✅ (12 vendors tested — see
-  [Verified parts](#verified-parts)). *(current)*
-- **v1.0** — broader vendor/part coverage, SPI on native targets, and a stable,
-  versioned JSON schema.
+  [Verified parts](#verified-parts)); multi-bus seam families (I²C, SPI, UART,
+  CAN) ✅; C or C++ output ✅. *(current)*
+- **v1.0** — broader vendor/part coverage, STM32 CAN (bxCAN/FDCAN), and a
+  stable, versioned JSON schema.
 
 Day-to-day progress is tracked in the [CHANGELOG](CHANGELOG.md).
 

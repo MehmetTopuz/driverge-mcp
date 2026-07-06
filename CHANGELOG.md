@@ -9,6 +9,15 @@ Entries are grouped by the commit area vocabulary from
 
 ## [Unreleased]
 
+### Breaking
+
+- **Codegen:** the SPI thin-HAL seam is now a single combined
+  `hal_spi_transfer(tx, tx_len, rx, rx_len)` call (one call = one CS-framed
+  transaction), replacing the `hal_spi_write`/`hal_spi_read` pair whose split
+  register-reads could not hold CS across vendor transactions. Existing SPI
+  seam implementations must be ported; `validate_driver` now rejects the
+  retired pair.
+
 ### Security
 
 - **MCP Server:** `generate_driver`'s `out_dir` is now confined under
@@ -49,6 +58,23 @@ Entries are grouped by the commit area vocabulary from
 
 ### Added
 
+- **Codegen:** native SPI on the ESP32 (ESP-IDF `spi_master`, hardware CS) and
+  STM32 (CubeHAL `HAL_SPI_*` + GPIO-framed CS) targets.
+- **Parser + Codegen:** the UART bus family — a UART detection tier
+  (UART/RS-232/RS-485/TTL-serial keywords, after I2C/SPI), a
+  `hal_uart_write`/`hal_uart_read` seam, native ESP-IDF and CubeHAL UART seam
+  implementations, and `framing_todo`: device-specific frame protocols are
+  marked reasoning gaps for the host AI rather than guessed.
+- **Schema + Parser + Codegen:** the CAN bus family — `"CAN"` joins the bus
+  enum, strict two-factor CAN detection (explicit "CAN bus/2.0/FD" phrase, or
+  uppercase CAN plus arbitration/DLC/controller/filter vocabulary), a
+  `hal_can_transfer` seam, and a native ESP32 TWAI seam. STM32 CAN is deferred
+  (bxCAN/FDCAN split).
+- **Codegen + MCP Server:** `generate_driver` accepts `language: "c" | "cpp"`
+  (default `"c"`, byte-identical to before). The C++ flavor renders a
+  class-based `.hpp`/`.cpp` driver that keeps the same `#define` register
+  constants and the same `extern "C"` thin-HAL seam, so native seam files and
+  `validate_driver` work unchanged.
 - **Parser:** a Maxim register-matrix adapter (`REGISTER | B7..B0 | REG ADDR |
   POR STATE` recap tables, e.g. MAX30102: 20 registers, 33 bit fields),
   handling multi-section pages, wrapped labels, and split two-line titles.
