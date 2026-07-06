@@ -126,3 +126,13 @@ export function hasGcc(): boolean {
     return false;
   }
 }
+
+/** Session D — L2 compile gate for the cpp portable skeleton (g++, not gcc). */
+export function hasGpp(): boolean {
+  try {
+    execSync("g++ --version", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}

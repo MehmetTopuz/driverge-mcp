@@ -340,6 +340,87 @@ describe("Driverge MCP surface", () => {
     expect(prompt.messages[0].content).toMatchObject({ type: "text" });
     expect((prompt.messages[0].content as { text: string }).text).toMatch(/validate_driver/);
   });
+
+  // Session D: generate_driver gains a `language` option ("c" default | "cpp"
+  // class wrapper). See wiki: thin-hal-non-negotiable (the cpp flavor keeps the
+  // same #define macros + extern "C" hal_* seam).
+  describe("generate_driver — language option (Session D)", () => {
+    it("advertises a `language` input with both c/cpp members", async () => {
+      const client = await connectClient();
+      const tools = (await client.listTools()).tools;
+      const generateDriverTool = tools.find((t) => t.name === "generate_driver");
+      expect(generateDriverTool).toBeDefined();
+      const properties =
+        (generateDriverTool?.inputSchema as { properties?: Record<string, unknown> } | undefined)
+          ?.properties ?? {};
+      expect(properties).toHaveProperty("language");
+      const languageSchema = JSON.stringify(properties.language);
+      expect(languageSchema).toMatch(/"cpp"/);
+      expect(languageSchema).toMatch(/"c"/);
+    });
+
+    it("without language, defaults to c: .h/.c files exactly as today", async () => {
+      const client = await connectClient();
+      const result = await client.callTool({
+        name: "generate_driver",
+        arguments: { ref: REF, target: "portable" },
+      });
+      expect((result as ToolResult).isError).toBeFalsy();
+      const artifact = JSON.parse(firstText(result));
+      expect(artifact.files.map((f: { path: string }) => f.path)).toEqual([
+        "bme280.h",
+        "bme280.c",
+      ]);
+    });
+
+    it('with language "cpp", the portable target renders .hpp/.cpp files', async () => {
+      const client = await connectClient();
+      const result = await client.callTool({
+        name: "generate_driver",
+        arguments: { ref: REF, target: "portable", language: "cpp" },
+      });
+      expect((result as ToolResult).isError).toBeFalsy();
+      const artifact = JSON.parse(firstText(result));
+      expect(artifact.files.map((f: { path: string }) => f.path)).toEqual([
+        "bme280.hpp",
+        "bme280.cpp",
+      ]);
+    });
+
+    it('with language "cpp", a native target (esp32) keeps its _hal_esp32.c seam file', async () => {
+      const client = await connectClient();
+      const result = await client.callTool({
+        name: "generate_driver",
+        arguments: { ref: REF, target: "esp32", language: "cpp" },
+      });
+      expect((result as ToolResult).isError).toBeFalsy();
+      const artifact = JSON.parse(firstText(result));
+      const paths = artifact.files.map((f: { path: string }) => f.path);
+      expect(paths).toContain("bme280_hal_esp32.c");
+      expect(paths).toContain("bme280.hpp");
+      expect(paths).toContain("bme280.cpp");
+    });
+
+    it("rejects an invalid language value (e.g. 'rust') via schema validation", async () => {
+      const client = await connectClient();
+      const result = await client.callTool({
+        name: "generate_driver",
+        arguments: { ref: REF, target: "portable", language: "rust" },
+      });
+      expect((result as ToolResult).isError).toBe(true);
+      expect(firstText(result)).toMatch(/language/i);
+    });
+
+    it("the generate-driver prompt's rendered text mentions the language option", async () => {
+      const client = await connectClient();
+      const prompt = await client.getPrompt({
+        name: "generate-driver",
+        arguments: { ref: REF, target: "portable" },
+      });
+      const renderedText = (prompt.messages[0].content as { text: string }).text;
+      expect(renderedText).toMatch(/language/i);
+    });
+  });
 });
 
 describe("generate_driver out_dir confinement", () => {
