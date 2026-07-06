@@ -25,6 +25,10 @@ import { computeRef, getDatasheet, putDatasheet } from "./cache.js";
 import { buildSummary } from "./summary.js";
 
 const TARGET = z.enum(["portable", "stm32", "esp32", "arduino"]);
+// Session D: output language flavor. "c" (default) is today's thin-HAL C
+// skeleton; "cpp" renders a class wrapper — see CodegenLanguage. Invalid values
+// (e.g. "rust") are rejected by this zod schema before the handler ever runs.
+const LANGUAGE = z.enum(["c", "cpp"]);
 const FILES = z.array(z.object({ path: z.string(), content: z.string() }));
 
 // Structural guard for validate_datasheet's `json` arg (S5, see wiki:
@@ -153,14 +157,15 @@ export function registerDrivergeTools(server: McpServer): void {
     {
       title: "Generate driver",
       description:
-        "Render a deterministic thin-HAL driver skeleton (with TODO(driverge) markers + a fill_in_brief) from a previously analyzed datasheet `ref`. Rejects refs that failed validation.",
+        "Render a deterministic thin-HAL driver skeleton (with TODO(driverge) markers + a fill_in_brief) from a previously analyzed datasheet `ref`. Rejects refs that failed validation. `language` defaults to \"c\" (struct + free functions); pass \"cpp\" for a class wrapper (.hpp/.cpp) around the same #define macros and hal_* seam.",
       inputSchema: {
         ref: z.string(),
         target: TARGET.default("portable"),
+        language: LANGUAGE.default("c"),
         out_dir: z.string().optional(),
       },
     },
-    async ({ ref, target, out_dir }) => {
+    async ({ ref, target, language, out_dir }) => {
       const entry = getDatasheet(ref);
       if (!entry) return text(`unknown ref "${ref}" — run analyze_datasheet first`, true);
       if (!entry.json.validation.valid) {
@@ -175,7 +180,7 @@ export function registerDrivergeTools(server: McpServer): void {
 
       let artifact;
       try {
-        artifact = generateDriver(entry.json, target as CodegenTarget);
+        artifact = generateDriver(entry.json, target as CodegenTarget, { language });
       } catch (err) {
         if (err instanceof UnsupportedTargetError) return text(err.message, true);
         if (err instanceof UnsupportedBusError) return text(err.message, true);
@@ -306,19 +311,19 @@ export function registerDrivergePrompts(server: McpServer): void {
     {
       title: "Generate a driver",
       description:
-        "Guided flow: render the skeleton for a ref/target, complete the TODO(driverge) markers using the datasheet resource, then validate.",
-      argsSchema: { ref: z.string(), target: z.string().optional() },
+        "Guided flow: render the skeleton for a ref/target/language, complete the TODO(driverge) markers using the datasheet resource, then validate.",
+      argsSchema: { ref: z.string(), target: z.string().optional(), language: z.string().optional() },
     },
-    ({ ref, target }) => ({
+    ({ ref, target, language }) => ({
       messages: [
         {
           role: "user",
           content: {
             type: "text",
             text: [
-              `Generate an embedded driver for datasheet ref "${ref}" (target: ${target ?? "portable"}).`,
+              `Generate an embedded driver for datasheet ref "${ref}" (target: ${target ?? "portable"}, language: ${language ?? "c"}).`,
               "",
-              `1. Call generate_driver({ ref: "${ref}", target: "${target ?? "portable"}" }).`,
+              `1. Call generate_driver({ ref: "${ref}", target: "${target ?? "portable"}", language: "${language ?? "c"}" }) — language is optional and defaults to "c" (struct + free functions); pass "cpp" for a C++ class wrapper (.hpp/.cpp) around the same #define macros and hal_* seam.`,
               `2. Read driverge://datasheet/${ref} for full register/command detail.`,
               "3. Complete every TODO(driverge) marker using the fill_in_brief and the datasheet JSON — init sequence, vendor quirks, docs (and CRC for command-set parts).",
               "4. Keep all bus access on the hal_* seam; never call a vendor peripheral API directly.",
