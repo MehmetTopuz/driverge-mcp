@@ -167,3 +167,53 @@ describe("lintDriver — completed cpp driver (class wrapper, same macros/seam)"
     expect(r.errors.join("\n")).toMatch(/EN_MASK/);
   });
 });
+
+// Contract amendment (orchestrator, post-GREEN 4b3da14/d576ba6): a native
+// target's cpp seam file is `_hal_<target>.cpp` (not .c) — see
+// tests/codegen/cpp-native.test.ts. lintDriver's isHalImpl already exempts
+// `_hal_[a-z0-9]+\.(?:c|cpp)$` (verified during Session D RED, unchanged by
+// this amendment), so a completed cpp NATIVE bundle (core + a `.cpp` seam
+// calling a vendor API directly) must still pass — this is a confirmation
+// pin, not a new RED, since isHalImpl's regex already covered .cpp.
+describe("lintDriver — completed cpp NATIVE bundle (seam file is _hal_<target>.cpp)", () => {
+  it("accepts a cpp core + a `_hal_esp32.cpp` seam that calls ESP-IDF directly (isHalImpl matches .cpp)", () => {
+    const seam: GeneratedFile = {
+      path: "cppdev_hal_esp32.cpp",
+      content: [
+        '#include "cppdev.hpp"',
+        '#include "driver/i2c_master.h"',
+        "",
+        "void hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len) {",
+        "    (void)addr; (void)reg;",
+        "    i2c_master_transmit(0, 0, 0, 0);",
+        "    (void)data; (void)len;",
+        "}",
+        "",
+        "void hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len) {",
+        "    (void)addr; (void)reg;",
+        "    i2c_master_transmit_receive(0, 0, 0, 0, 0, 0);",
+        "    (void)data; (void)len;",
+        "}",
+        "",
+        "void hal_delay_ms (uint32_t ms) {",
+        "    (void)ms;",
+        "}",
+        "",
+      ].join("\n"),
+    };
+    const r = lintDriver([...completedFiles(), seam], json);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+  });
+
+  it("still rejects the same ESP-IDF call if it leaks into the cpp CORE instead of the seam", () => {
+    const leaked = completedFiles().map((f) =>
+      f.path === "cppdev.cpp"
+        ? { path: f.path, content: f.content.replace("return 0;\n}", "i2c_master_transmit(0,0,0,0);\n    return 0;\n}") }
+        : f,
+    );
+    const r = lintDriver(leaked, json);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/ESP-IDF/);
+  });
+});

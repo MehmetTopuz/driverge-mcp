@@ -387,7 +387,10 @@ describe("Driverge MCP surface", () => {
       ]);
     });
 
-    it('with language "cpp", a native target (esp32) keeps its _hal_esp32.c seam file', async () => {
+    // Amended (orchestrator, post-GREEN 4b3da14/d576ba6): the cpp seam is
+    // `_hal_esp32.cpp`, not `.c` — the `.c` seam `#include`s "bme280.h", which
+    // doesn't exist in a cpp bundle. See tests/codegen/cpp-native.test.ts.
+    it('with language "cpp", a native target (esp32) gets a `_hal_esp32.cpp` seam file — no .h file anywhere', async () => {
       const client = await connectClient();
       const result = await client.callTool({
         name: "generate_driver",
@@ -396,9 +399,13 @@ describe("Driverge MCP surface", () => {
       expect((result as ToolResult).isError).toBeFalsy();
       const artifact = JSON.parse(firstText(result));
       const paths = artifact.files.map((f: { path: string }) => f.path);
-      expect(paths).toContain("bme280_hal_esp32.c");
+      expect(paths).toContain("bme280_hal_esp32.cpp");
       expect(paths).toContain("bme280.hpp");
       expect(paths).toContain("bme280.cpp");
+      expect(paths.some((p: string) => p.endsWith(".h"))).toBe(false);
+      for (const f of artifact.files as { path: string; content: string }[]) {
+        expect(f.content).not.toContain('"bme280.h"');
+      }
     });
 
     it("rejects an invalid language value (e.g. 'rust') via schema validation", async () => {
