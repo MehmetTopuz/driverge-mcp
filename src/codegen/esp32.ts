@@ -16,9 +16,10 @@
 
 import type { DatasheetJson } from "../schema/types.js";
 import { prefixOf, slug } from "./ident.js";
+import { generatePortableCppDriver } from "./portable-cpp.js";
 import { generatePortableDriver } from "./portable.js";
 import { UnsupportedBusError } from "./types.js";
-import type { DriverArtifact, GeneratedFile } from "./types.js";
+import type { CodegenLanguage, DriverArtifact, GeneratedFile } from "./types.js";
 
 function halImplI2c(name: string, prefix: string): GeneratedFile {
   const content = [
@@ -239,15 +240,24 @@ function halImplCan(name: string, prefix: string): GeneratedFile {
   return { path: `${name}_hal_esp32.c`, content };
 }
 
-/** Portable core + an ESP-IDF seam implementation for the same part. */
-export function generateEsp32Driver(json: DatasheetJson): DriverArtifact {
+/**
+ * Portable core + an ESP-IDF seam implementation for the same part. The seam
+ * file is always plain C (ESP-IDF's driver calls) regardless of language: with
+ * language "cpp" the core's .hpp wraps the same hal_* declarations in
+ * `extern "C" { ... }`, so this unchanged seam file still links against the
+ * class methods — see portable-cpp.ts's EXTERN_C_NOTE.
+ */
+export function generateEsp32Driver(
+  json: DatasheetJson,
+  opts: { language?: CodegenLanguage } = {},
+): DriverArtifact {
   const bus = json.protocol.bus;
   if (bus !== "I2C" && bus !== "SPI" && bus !== "UART" && bus !== "CAN") {
     throw new UnsupportedBusError("esp32", bus);
   }
   const name = slug(json.metadata.part);
   const prefix = prefixOf(json.metadata.part);
-  const base = generatePortableDriver(json);
+  const base = opts.language === "cpp" ? generatePortableCppDriver(json) : generatePortableDriver(json);
 
   const hal =
     bus === "SPI"

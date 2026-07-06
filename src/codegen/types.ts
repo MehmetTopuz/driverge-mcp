@@ -12,6 +12,17 @@ export const CODEGEN_TARGETS: readonly CodegenTarget[] = [
   "arduino",
 ];
 
+/**
+ * Output language flavor (Session D). "c" (default) is today's thin-HAL C
+ * skeleton, byte-identical across every target/bus. "cpp" renders the SAME
+ * #define macro constants and the SAME extern "C" hal_* seam wrapped in a
+ * class (.hpp/.cpp instead of .h/.c) — see wiki: thin-hal-non-negotiable,
+ * platform-specific-codegen.
+ */
+export type CodegenLanguage = "c" | "cpp";
+
+export const CODEGEN_LANGUAGES: readonly CodegenLanguage[] = ["c", "cpp"];
+
 export interface GeneratedFile {
   path: string;
   content: string;

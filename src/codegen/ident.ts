@@ -44,3 +44,16 @@ export function maskHex(n: number, regWidth = 8): string {
 export function prefixOf(part: string): string {
   return macro(slug(part));
 }
+
+/**
+ * PascalCase a lower-snake slug for a C++ class name, e.g. "bme280" -> "Bme280",
+ * "tmag5170" -> "Tmag5170". Used only by the cpp codegen flavor (Session D); the
+ * C flavor has no class, so this never touches C output.
+ */
+export function pascalCase(s: string): string {
+  return s
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+}
