@@ -55,7 +55,14 @@ function validateRegisters(
     return;
   }
 
-  if (status === "partial") {
+  // Warn on ACTUAL content, not the extraction.status field (A6, see
+  // raw/DRIVERGE_ISSUES.md): a host-completed map that already carries bit
+  // fields must not be warned just because status still reads "partial". Fire
+  // only when no register has any bit field — the true "addresses without
+  // bit-field detail" condition. (For freshly-assembled data this matches the
+  // status:"partial" case exactly, since deriveExtraction sets that iff no
+  // register has bits — see schema/assemble deriveExtraction.)
+  if (!registers.some((r) => r.bitFields.length > 0)) {
     warnings.push(
       "register map is partial — addresses extracted without bit-field detail; the host AI should add bit fields from the datasheet",
     );

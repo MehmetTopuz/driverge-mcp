@@ -201,6 +201,26 @@ describe("validateDatasheet — graceful degradation (extraction status)", () =>
     expect(r.valid).toBe(true);
     expect(r.warnings.join(" ")).toMatch(/partial|bit field|without/i);
   });
+
+  // A6 (raw/DRIVERGE_ISSUES.md): the "partial" warning must key off ACTUAL
+  // content, not the extraction.status string. A host-completed map whose
+  // registers already carry bit fields must NOT be warned even if status still
+  // reads "partial" (the false positive seen in the MPU-9250 field test).
+  it("does NOT warn about missing bit fields when registers already carry them, even if status is 'partial'", () => {
+    const r = validateDatasheet(
+      withExtraction(
+        {
+          kind: "register_map",
+          registers: [
+            { name: "cfg", address: "0x1B", reset: "0x00", bitFields: [{ name: "gyro_fs", msb: 4, lsb: 3 }] },
+          ],
+        },
+        { status: "partial", detectedPages: [29] },
+      ),
+    );
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join(" ")).not.toMatch(/without bit-field|should add bit fields/i);
+  });
 });
 
 // Session C — CAN joins the Bus enum. protocol.bus "CAN" must validate through
