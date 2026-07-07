@@ -21,6 +21,7 @@ To run the datasheet-driven tests, drop the PDFs here with these names:
 | `pca9685.pdf` | NXP PCA9685 (PWM/LED controller) | NXP datasheet (Adafruit mirror) |
 | `mlx90614.pdf` | Melexis MLX90614 (IR temperature sensor) | Melexis datasheet (melexis.com) |
 | `max30102.pdf` | Maxim MAX30102 (pulse oximeter/heart-rate sensor) | Analog Devices/Maxim datasheet (MikroE mirror) |
+| `mpu9250.pdf` | InvenSense/TDK MPU-9250 (9-axis IMU, I2C/SPI) | InvenSense Product Specification PS-MPU-9250A-01 |
 
 Tests that need a fixture skip themselves when the file is absent, so the suite
 stays green on a fresh clone. The pure unit tests and the synthetic-PDF
