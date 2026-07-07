@@ -139,8 +139,8 @@ describe("generateDriver(json, 'portable', {language:'cpp'}) — register_map I2
 
   it('wraps the seam declarations in extern "C" { ... }, same decl strings as the C header', () => {
     requireGenerated();
-    const writeLine = lineWith(cHeader, "void hal_i2c_write(");
-    const readLine = lineWith(cHeader, "void hal_i2c_read (");
+    const writeLine = lineWith(cHeader, "int hal_i2c_write(");
+    const readLine = lineWith(cHeader, "int hal_i2c_read (");
     const delayLine = lineWith(cHeader, "void hal_delay_ms (");
     const block = externCBlock(hpp);
     expect(block).toContain(writeLine);
@@ -243,7 +243,7 @@ describe("generateDriver(json, 'portable', {language:'cpp'}) — SPI register_ma
 
   it('wraps the combined hal_spi_transfer seam in extern "C", same decl string as the C header', () => {
     requireGenerated();
-    const transferLine = lineWith(cHeader, "void hal_spi_transfer(");
+    const transferLine = lineWith(cHeader, "int hal_spi_transfer(");
     const block = externCBlock(hpp);
     expect(block).toContain(transferLine);
   });

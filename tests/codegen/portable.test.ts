@@ -75,7 +75,7 @@ describe("generatePortableDriver — SPI combined-transfer seam (ADXL345-shaped)
 
   it("declares a single combined hal_spi_transfer seam function plus hal_delay_ms", () => {
     expect(header).toContain(
-      "void hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
+      "int hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
     );
     expect(header).toContain("void hal_delay_ms (uint32_t ms);");
   });
@@ -111,7 +111,7 @@ describe("generatePortableDriver — SPI seam on a realistic multi-register part
 
   it("uses the combined hal_spi_transfer seam, never the retired write/read pair", () => {
     expect(header).toContain(
-      "void hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
+      "int hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
     );
     expect(header).not.toMatch(/hal_spi_write|hal_spi_read/);
     expect(source).not.toMatch(/hal_spi_write|hal_spi_read/);
@@ -418,11 +418,19 @@ describe("generatePortableDriver — register_map (BME280 golden)", () => {
   });
 
   it("declares only the thin-HAL seam and routes reads/writes through it", () => {
-    expect(header).toContain("void hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);");
-    expect(header).toContain("void hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);");
+    expect(header).toContain("int hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);");
+    expect(header).toContain("int hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);");
     expect(header).toContain("void hal_delay_ms (uint32_t ms);");
     expect(source).toContain("hal_i2c_read(dev->i2c_addr, reg, value, 1);");
     expect(source).not.toMatch(/HAL_I2C_|Wire\.|i2c_master_/);
+  });
+
+  // A7 (raw/DRIVERGE_ISSUES.md): the seam returns int (0 = success) and the
+  // driver core PROPAGATES it — a NACK/bus error must reach the caller instead
+  // of being swallowed by an unconditional `return 0`.
+  it("propagates the I2C seam status out of read_register/write_register (no swallowed errors)", () => {
+    expect(source).toContain("return hal_i2c_read(dev->i2c_addr, reg, value, 1);");
+    expect(source).toContain("return hal_i2c_write(dev->i2c_addr, reg, &value, 1);");
   });
 
   it("marks reasoning gaps with TODO(driverge) and a matching brief", () => {

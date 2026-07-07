@@ -80,21 +80,20 @@ function cppBusSeam(busKind: RegisterMapBus, prefix: string): CppBusSeam {
     return {
       member: ["    uint8_t i2c_addr_;"],
       initMember: [`    i2c_addr_ = ${prefix}_I2C_ADDR;`],
-      readBody: ["    hal_i2c_read(i2c_addr_, reg, &value, 1);", "    return 0;"],
-      writeBody: ["    hal_i2c_write(i2c_addr_, reg, &value, 1);", "    return 0;"],
+      readBody: ["    return hal_i2c_read(i2c_addr_, reg, &value, 1);"],
+      writeBody: ["    return hal_i2c_write(i2c_addr_, reg, &value, 1);"],
     };
   }
   if (busKind === "SPI") {
     return {
       member: [],
       initMember: [],
-      readBody: ["    hal_spi_transfer(&reg, 1, &value, 1);", "    return 0;"],
+      readBody: ["    return hal_spi_transfer(&reg, 1, &value, 1);"],
       writeBody: [
         "    uint8_t frame[2];",
         "    frame[0] = reg;",
         "    frame[1] = value;",
-        "    hal_spi_transfer(frame, 2, nullptr, 0);",
-        "    return 0;",
+        "    return hal_spi_transfer(frame, 2, nullptr, 0);",
       ],
     };
   }
@@ -315,8 +314,9 @@ function commandDriverCpp(
       : can
         ? BUS_SEAM.CAN.decl
         : [
-            "void hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
-            "void hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+            "/* Return 0 on success, non-zero on a bus error (e.g. NACK). */",
+            "int hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+            "int hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
           ]),
     "void hal_delay_ms (uint32_t ms);",
     "}",
@@ -353,8 +353,7 @@ function commandDriverCpp(
             "    msb = (uint8_t)(command >> 8);",
             "    lsb = (uint8_t)(command & 0xFF);",
             ...I2C_COMMAND_FRAME_NOTE,
-            "    hal_i2c_write(i2c_addr_, msb, &lsb, 1);",
-            "    return 0;",
+            "    return hal_i2c_write(i2c_addr_, msb, &lsb, 1);",
           ]),
     "}",
     "",

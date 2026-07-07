@@ -133,28 +133,30 @@ interface BusSeam {
 export const BUS_SEAM: Record<RegisterMapBus, BusSeam> = {
   I2C: {
     decl: [
-      "void hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
-      "void hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+      "/* Return 0 on success, non-zero on a bus error (e.g. NACK). */",
+      "int hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+      "int hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
     ],
     handleField: "    uint8_t i2c_addr;",
-    readBody: ["    hal_i2c_read(dev->i2c_addr, reg, value, 1);"],
-    writeBody: ["    hal_i2c_write(dev->i2c_addr, reg, &value, 1);"],
+    readBody: ["    return hal_i2c_read(dev->i2c_addr, reg, value, 1);"],
+    writeBody: ["    return hal_i2c_write(dev->i2c_addr, reg, &value, 1);"],
   },
   SPI: {
     decl: [
       "/* One call = one CS-framed transaction: CS is asserted, tx_len bytes are",
       " * clocked out, then rx_len bytes are clocked in, then CS is deasserted.",
       " * tx/rx may be NULL when their respective length is 0. CS is handled",
-      " * entirely inside hal_spi_transfer — callers never touch it. */",
-      "void hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
+      " * entirely inside hal_spi_transfer — callers never touch it. Returns 0 on",
+      " * success, non-zero on a bus error. */",
+      "int hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
     ],
     handleField: "    uint8_t _reserved; /* platform CS handled in hal_spi_transfer */",
-    readBody: ["    hal_spi_transfer(&reg, 1, value, 1);"],
+    readBody: ["    return hal_spi_transfer(&reg, 1, value, 1);"],
     writeBody: [
       "    uint8_t frame[2];",
       "    frame[0] = reg;",
       "    frame[1] = value;",
-      "    hal_spi_transfer(frame, 2, NULL, 0);",
+      "    return hal_spi_transfer(frame, 2, NULL, 0);",
     ],
   },
   UART: {
@@ -349,16 +351,19 @@ function registerDriver(
     "",
   );
 
+  // The I2C/SPI seam bodies now END with `return hal_..._transfer/read/write(...)`,
+  // propagating the seam's status (0 = success) to the caller — a NACK/bus error
+  // is no longer swallowed (A7). So no trailing `return 0` is appended here.
   const readBody = uart
     ? uartFramingBody(["dev", "reg", "value"])
     : can
       ? canFramingBody(["dev", "reg", "value"])
-      : ["    if (dev == NULL || value == NULL) {", "        return -1;", "    }", ...seam.readBody, "    return 0;"];
+      : ["    if (dev == NULL || value == NULL) {", "        return -1;", "    }", ...seam.readBody];
   const writeBody = uart
     ? uartFramingBody(["dev", "reg", "value"])
     : can
       ? canFramingBody(["dev", "reg", "value"])
-      : ["    if (dev == NULL) {", "        return -1;", "    }", ...seam.writeBody, "    return 0;"];
+      : ["    if (dev == NULL) {", "        return -1;", "    }", ...seam.writeBody];
 
   const source: string[] = [
     `#include "${name}.h"`,
@@ -540,10 +545,7 @@ function commandDriver(
       ? BUS_SEAM.UART.decl
       : can
         ? BUS_SEAM.CAN.decl
-        : [
-            "void hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
-            "void hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
-          ]),
+        : BUS_SEAM.I2C.decl),
     "void hal_delay_ms (uint32_t ms);",
     "",
     "/* Driver handle. */",
@@ -590,8 +592,7 @@ function commandDriver(
             "    msb = (uint8_t)(command >> 8);",
             "    lsb = (uint8_t)(command & 0xFF);",
             ...I2C_COMMAND_FRAME_NOTE,
-            "    hal_i2c_write(dev->i2c_addr, msb, &lsb, 1);",
-            "    return 0;",
+            "    return hal_i2c_write(dev->i2c_addr, msb, &lsb, 1);",
           ]),
     "}",
     "",
