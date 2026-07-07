@@ -206,6 +206,14 @@ else:
 | UART | `hal_uart_write`, `hal_uart_read` |
 | CAN | `hal_can_transfer` (one call = one frame exchange) |
 
+The register-access transfer seams (`hal_i2c_*`, `hal_spi_transfer`,
+`hal_can_transfer`) return `int` — **`0` on success, non-zero on a bus error**
+(NACK, timeout) — and `<part>_read_register`/`_write_register` **propagate** that
+status, so a failed transfer surfaces to the caller instead of being silently
+swallowed. (`hal_uart_read` returns the byte count actually read; `hal_delay_ms`
+is `void`.) A native seam (ESP32, STM32) returns its vendor status directly
+(`esp_err_t`/`HAL_OK`-mapped), which is already `0` on success.
+
 The driver core is therefore identical across platforms; a native target
 (ESP32, STM32) just pre-fills the seam with the vendor calls.
 `validate_driver` enforces this purity: a driver that calls a vendor peripheral
@@ -289,6 +297,30 @@ Set it in the MCP config's `env` block, e.g.:
 Without `out_dir` the generated files are returned in the tool result only —
 no disk writes, no configuration needed.
 
+### Windows & npx notes
+
+The config blocks above (writing `.mcp.json` / `claude_desktop_config.json`
+**directly**) are the most reliable way to add Driverge on Windows. A few
+environment-specific snags worth knowing:
+
+- **Prefer editing the config file over `claude mcp add … -- npx -y driverge-mcp`.**
+  The `-y` after `npx` can be parsed by the `claude` CLI itself
+  (`unknown option '-y'`) rather than passed through. Writing the JSON block
+  directly sidesteps it. (`-y` still belongs in the `args` array, as shown above —
+  it only misbehaves as a bare CLI flag.)
+- **PowerShell 5.1 + `claude mcp add-json`.** Nested double-quotes in the inline
+  JSON can get mangled before the CLI sees them (`Invalid configuration: Invalid
+  input`). Again, write the `.mcp.json` file directly instead of passing JSON on
+  the command line.
+- **Spawning the server yourself?** On Windows, launching `npx.cmd` from Node
+  needs `shell: true` (otherwise `spawn EINVAL`) — Node no longer runs `.cmd`
+  shims without a shell. MCP clients handle this for you; this only bites custom
+  smoke-test scripts.
+- **"Pending approval" in `claude mcp list`.** A project-scope `.mcp.json` may show
+  as `⏸ Pending approval` in a separate `claude mcp list` process while the
+  `driverge` tools are already callable in your active session — the listing lags
+  the running session, it does not mean the server failed to load.
+
 ### Run from source (development)
 
 To contribute, or to run the latest unreleased changes:
@@ -328,6 +360,15 @@ Give your MCP client a datasheet and ask it to build a driver. The typical flow:
    until it passes.
 
 Reusing the same `ref` with a different `target` re-renders with **no re-parse**.
+
+**Completing a `deferred` datasheet.** When `analyze_datasheet` reports
+`extraction: deferred` (the register/command section was detected but not
+auto-extracted — common for split product-spec/register-map documents), the host
+AI reconstructs the map from the `driverge://datasheet/<ref>` resource and
+**persists it back** with `validate_datasheet({ "ref": "…", "json": { … } })` —
+passing **both** `ref` and the completed `json` overwrites the cached datasheet
+under that `ref`. The next `generate_driver({ "ref": "…" })` then renders the real
+registers instead of a TODO stub. This closes the loop without re-analyzing.
 
 ### Worked example — BME280 → portable driver
 
@@ -371,7 +412,7 @@ datasheet prose, and `validate_driver` checks the result.
 | Tool | `analyze_datasheet` | PDF → validated JSON, cached under a `ref` |
 | Tool | `generate_driver` | `ref` + `target` → driver skeleton + `fill_in_brief` |
 | Tool | `validate_driver` | static-lint a completed driver against its `ref` |
-| Tool | `validate_datasheet` | re-run the L5 validator over a `ref` or JSON |
+| Tool | `validate_datasheet` | re-run the L5 validator over a `ref` or JSON; passing **both** `ref` + `json` persists the completed datasheet under that `ref` |
 | Tool | `ping` | health check — confirms the server is running |
 | Resource | `driverge://datasheet/<ref>` | full parsed JSON for an analyzed datasheet |
 | Resource | `driverge://schema` | the frozen datasheet JSON-Schema contract |

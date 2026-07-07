@@ -9,6 +9,53 @@ Entries are grouped by the commit area vocabulary from
 
 ## [Unreleased]
 
+Fixes surfaced by an end-to-end field test against the MPU-9250 Product
+Specification (see the field report in `raw/DRIVERGE_ISSUES.md`).
+
+### Breaking
+
+- **Codegen:** the register-access thin-HAL seams now return `int` (**`0` on
+  success, non-zero on a bus error**) instead of `void` — `hal_i2c_write`,
+  `hal_i2c_read`, and `hal_spi_transfer` — and the generated
+  `<part>_read_register`/`_write_register` (and command `send_command`)
+  **propagate** that status instead of unconditionally returning `0`. A NACK or
+  timeout now reaches the caller rather than being silently swallowed (the
+  field test's garbage-read on a floating bus). Hand-written seam
+  implementations must be updated to return a status; the native ESP32
+  (`esp_err_t`) and STM32 (`HAL_OK`-mapped) seams do this already.
+
+### Fixed
+
+- **Parser:** I2C device-address extraction now recognizes **binary-notation**
+  addresses (`b110100X`, `0b1101000`, `1101000b`) and **ranks the primary
+  device address first**. The MPU-9250 writes its primary address only in binary
+  (0x68/0x69) and a hex sub-address (0x0C) for the on-board AK8963 magnetometer,
+  so the old hex-only scan grabbed the wrong one and hardcoded it into the
+  driver; `protocol.addresses[0]` is now the real device address.
+- **Parser:** part-number patterns for the InvenSense/TDK **MPU** and **ICM**
+  families — "MPU-9250" (and MPU6050/ICM-20948/…) previously extracted an empty
+  `metadata.part`.
+- **Validation:** the "register map is partial — addresses without bit-field
+  detail" warning is now **content-based** (fires only when no register carries
+  any bit field) instead of keyed on `extraction.status`, removing a false
+  positive on a host-completed map that already has bit fields.
+
+### Added
+
+- **MCP Server:** `validate_datasheet` called with **both** `ref` and `json`
+  now **persists** the completed datasheet under that `ref` (overwriting the
+  cached entry) and returns its fresh validation — closing the
+  "deferred → host completes the map → generate" loop so the next
+  `generate_driver(ref)` renders the real registers instead of a TODO stub.
+- **Tests:** an MPU-9250 product-spec regression fixture/golden pinning the
+  part number, primary-address ranking, and the expected register-map deferral.
+
+### Docs
+
+- **README:** the thin-HAL seam return contract (int, 0 = success), the
+  deferred-datasheet completion loop via `validate_datasheet(ref, json)`, and
+  Windows/`npx`/`.mcp.json` installation notes.
+
 ## [0.0.1] - 2026-07-07
 
 Interim test release — publishes the current `main` to npm so it can be installed

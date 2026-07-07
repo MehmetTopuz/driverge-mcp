@@ -1,6 +1,6 @@
 {
   "name": "driverge-mcp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "MCP server that turns IC datasheet PDFs into embedded C/C++ drivers, driven by any MCP client.",
   "keywords": [
     "mcp",
