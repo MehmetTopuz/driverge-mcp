@@ -296,6 +296,71 @@ describe("Driverge MCP surface", () => {
     expect(JSON.parse(firstText(result)).valid).toBe(true);
   });
 
+  // A4 (raw/DRIVERGE_ISSUES.md, High): the deferred loop must close. A host that
+  // completes a previously-deferred register map and calls
+  // validate_datasheet(ref, json) must have that map PERSISTED under the ref, so
+  // the very next generate_driver(ref) renders the real registers — not the
+  // "could not auto-extract" TODO stub.
+  it("validate_datasheet(ref, json) persists the completed map so generate_driver picks it up", async () => {
+    const client = await connectClient();
+    const deferredRef = "ds_test_deferred_mpu";
+    const deferred = {
+      ...validJson,
+      metadata: { ...validJson.metadata, part: "MPU-9250" },
+      protocol: { bus: "I2C" as const, addresses: ["0x68"] },
+      interface: { kind: "register_map" as const, registers: [] },
+      extraction: { status: "deferred" as const, detectedPages: [29] },
+      validation: {
+        valid: true,
+        errors: [],
+        warnings: ["register map detected but not auto-extracted"],
+      },
+    } as unknown as DatasheetJson;
+    putDatasheet({ ref: deferredRef, pdfPath: "/x/mpu9250.pdf", json: deferred });
+
+    const completed = {
+      ...deferred,
+      interface: {
+        kind: "register_map",
+        registers: [
+          {
+            name: "GYRO_CONFIG",
+            address: "0x1B",
+            reset: "0x00",
+            bitFields: [{ name: "GYRO_FS_SEL", msb: 4, lsb: 3 }],
+          },
+          {
+            name: "WHO_AM_I",
+            address: "0x75",
+            reset: "0x71",
+            bitFields: [{ name: "WHOAMI", msb: 7, lsb: 0 }],
+          },
+        ],
+      },
+      extraction: { status: "complete", detectedPages: [29] },
+    };
+
+    const persistResult = await client.callTool({
+      name: "validate_datasheet",
+      arguments: { ref: deferredRef, json: completed },
+    });
+    const persisted = JSON.parse(firstText(persistResult));
+    expect(persisted.persisted).toBe(true);
+    expect(persisted.validation.valid).toBe(true);
+    // A6: a fully bit-fielded map must not draw the "add bit fields" warning.
+    expect(persisted.validation.warnings.join(" ")).not.toMatch(/without bit-field/i);
+
+    const genResult = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: deferredRef, target: "portable" },
+    });
+    const artifact = JSON.parse(firstText(genResult));
+    const header = artifact.files.find((f: { path: string }) => f.path.endsWith(".h"));
+    expect(header.content).toMatch(/_REG_GYRO_CONFIG 0x1B/);
+    expect(header.content).toMatch(/_REG_WHO_AM_I 0x75/);
+    expect(header.content).not.toMatch(/could not auto-extract/);
+  });
+
   it("validate_datasheet rejects malformed JSON with a clean error, not a raw TypeError", async () => {
     const client = await connectClient();
     const result = await client.callTool({

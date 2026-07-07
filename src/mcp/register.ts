@@ -285,13 +285,36 @@ export function registerDrivergeTools(server: McpServer): void {
     {
       title: "Validate datasheet JSON",
       description:
-        "Re-run the L5 validator over a cached `ref` or a supplied datasheet JSON. Thin wrapper over the same rules analyze_datasheet applies internally.",
+        "Re-run the L5 validator over a cached `ref` or a supplied datasheet JSON. Passing BOTH `ref` and `json` PERSISTS the completed JSON under that ref (overwriting the cached datasheet) and returns its fresh validation — this is how you close the deferred loop: analyze → complete the register/command map from the datasheet resource → validate_datasheet(ref, json) → generate_driver(ref) then sees the completed map. Thin wrapper over the same rules analyze_datasheet applies internally.",
       inputSchema: {
         ref: z.string().optional(),
         json: z.record(z.string(), z.unknown()).optional(),
       },
     },
     async ({ ref, json }) => {
+      // Both args → the host has completed a previously deferred datasheet and
+      // wants it persisted so generate_driver(ref) picks it up (A4, see
+      // raw/DRIVERGE_ISSUES.md). Guard-parse, re-validate, attach the fresh
+      // validation, and overwrite the cache entry under this ref.
+      if (ref && json) {
+        const parsed = DATASHEET_JSON_GUARD.safeParse(json);
+        if (!parsed.success) {
+          const issues = parsed.error.issues
+            .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+            .join("; ");
+          return text(`invalid datasheet JSON — ${issues}`, true);
+        }
+        const supplied = parsed.data as unknown as DatasheetJson;
+        // Recompute validation from the supplied content rather than trusting any
+        // `validation` field the host may (or may not) have included — so the
+        // persisted entry's validity always reflects the real map, and
+        // generate_driver's `validation.valid` gate stays honest.
+        const validation = validateDatasheet(supplied);
+        const completed: DatasheetJson = { ...supplied, validation };
+        const existing = getDatasheet(ref);
+        putDatasheet({ ref, pdfPath: existing?.pdfPath ?? "(host-completed)", json: completed });
+        return text({ persisted: true, ref, validation });
+      }
       if (ref) {
         const entry = getDatasheet(ref);
         if (!entry) return text(`unknown ref "${ref}"`, true);
