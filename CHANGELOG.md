@@ -9,6 +9,12 @@ Entries are grouped by the commit area vocabulary from
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-07-07
+
+Interim test release — publishes the current `main` to npm so it can be installed
+via `npx driverge-mcp` for early hands-on testing, ahead of the official v0.1.0
+launch. Contents = the accumulated changes below.
+
 ### Breaking
 
 - **Codegen:** the SPI thin-HAL seam is now a single combined
@@ -97,4 +103,5 @@ Entries are grouped by the commit area vocabulary from
   Linux/macOS/Windows on Node 20 & 22.
 - Project docs: full README, `SECURITY.md`, `CODE_OF_CONDUCT.md`, ESLint config.
 
-[Unreleased]: https://github.com/MehmetTopuz/driverge-mcp/commits/main
+[Unreleased]: https://github.com/MehmetTopuz/driverge-mcp/compare/v0.0.1...main
+[0.0.1]: https://github.com/MehmetTopuz/driverge-mcp/releases/tag/v0.0.1
