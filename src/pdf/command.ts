@@ -80,23 +80,100 @@ export function extractProtocol(pages: PageContent[]): Protocol {
           ? "CAN"
           : "unknown";
 
-  const addresses: string[] = [];
   // Only I2C has a bus device address. Scanning for "0xNN near 'address'" on an
   // SPI datasheet yields register offsets, not addresses (e.g. AEAT-8811), so we
   // gate address extraction on the I2C bus.
-  if (bus === "I2C") {
-    for (const ctx of text.matchAll(/address[^.]{0,60}/gi)) {
-      for (const m of ctx[0].matchAll(/0x[0-7][0-9a-f]/gi)) {
-        const addr = upperHex(m[0]);
-        const value = Number.parseInt(addr, 16);
-        if (value >= 0x08 && value <= 0x77 && !addresses.includes(addr)) {
-          addresses.push(addr);
-        }
+  const addresses = bus === "I2C" ? extractI2cAddresses(text) : [];
+  return addresses.length > 0 ? { bus, addresses } : { bus };
+}
+
+// A binary-notation 7-bit I2C address token: an optional "0b"/"b" prefix (or a
+// trailing "b"), 7 bits, where the last bit may be an "X"/"x" placeholder for a
+// pin-selectable LSB (e.g. AD0). "b110100X", "0b1101000", "1101000b" all match.
+const BINARY_ADDRESS = /\b(0b|b)?([01]{6}[01xX])(b)?\b/gi;
+
+// Context words that mark a SECONDARY sub-device address rather than the part's
+// own primary bus address — the MPU-9250 case, where 0x0C is the AK8963
+// magnetometer behind the main device (raw/DRIVERGE_ISSUES.md A2). Kept narrow
+// (magnetometer/AK-family/"secondary|sub address") so it does not fire on the
+// aux-interface prose common to plain IMUs.
+const SUBDEVICE_CONTEXT =
+  /\b(?:magnetometer|ak8963|ak09\d{3}|secondary\s+address|sub[-\s]?address)\b/i;
+
+/**
+ * L4b — I2C device addresses, ranked so `addresses[0]` is the PRIMARY device
+ * address (which is what codegen hardcodes as `<PART>_I2C_ADDR`). Recognizes
+ * both hex ("0x68") and binary-notation ("b110100X", "0b1101000", "1101000b")
+ * 7-bit addresses near the word "address". Many InvenSense/TDK-style sheets
+ * (e.g. MPU-9250) give the primary address ONLY in binary and a secondary
+ * sub-device address (the AK8963 magnetometer, 0x0C) in hex, so the old
+ * hex-only scan grabbed the wrong one (raw/DRIVERGE_ISSUES.md A2/A5).
+ *
+ * Two passes keep it safe: hex first (preserving the pre-existing text order of
+ * hex-only sheets byte-for-byte), then binary. A small stable relevance score
+ * then floats the primary up: +1 for a binary-notation match (the primary's
+ * usual form on these sheets), -2 for a magnetometer/sub-device context. Equal
+ * scores keep first-seen order, so hex-only sheets are unchanged.
+ */
+export function extractI2cAddresses(text: string): string[] {
+  interface Candidate {
+    addr: string;
+    score: number;
+    order: number;
+  }
+  const byAddr = new Map<string, Candidate>();
+  let order = 0;
+
+  const consider = (addr: string, fromBinary: boolean, ctx: string): void => {
+    const value = Number.parseInt(addr, 16);
+    if (value < 0x08 || value > 0x77) return; // outside the usable 7-bit space
+    let score = 0;
+    if (fromBinary) score += 1;
+    if (SUBDEVICE_CONTEXT.test(ctx)) score -= 2;
+    const existing = byAddr.get(addr);
+    if (existing) {
+      if (score > existing.score) existing.score = score; // keep strongest context
+      return;
+    }
+    byAddr.set(addr, { addr, score, order: order++ });
+  };
+
+  // Collect the "near-address" windows once; each carries a little preceding
+  // context so a "magnetometer"/"secondary" qualifier before the keyword is
+  // visible to the scorer.
+  const windows = [...text.matchAll(/address[^.]{0,60}/gi)].map((m) => ({
+    body: m[0],
+    ctx: text.slice(Math.max(0, (m.index ?? 0) - 32), (m.index ?? 0) + m[0].length),
+  }));
+
+  // Pass 1 — hex forms, in text order.
+  for (const { body, ctx } of windows) {
+    for (const m of body.matchAll(/0x[0-7][0-9a-f]/gi)) {
+      consider(upperHex(m[0]), false, ctx);
+    }
+  }
+  // Pass 2 — binary-notation forms (bumps score of already-seen addresses or
+  // appends new ones after the hex-ordered set).
+  for (const { body, ctx } of windows) {
+    for (const m of body.matchAll(BINARY_ADDRESS)) {
+      const [, prefix, core, suffix] = m;
+      const hasPlaceholder = /[xX]/.test(core);
+      // A bare, unmarked 7-bit run is too ambiguous to treat as an address —
+      // require an explicit binary marker (prefix/suffix "b", or an X placeholder).
+      if (!prefix && !suffix && !hasPlaceholder) continue;
+      const bitStrings = hasPlaceholder
+        ? [core.replace(/[xX]/, "0"), core.replace(/[xX]/, "1")]
+        : [core];
+      for (const bits of bitStrings) {
+        const value = Number.parseInt(bits, 2);
+        consider(`0x${value.toString(16).toUpperCase().padStart(2, "0")}`, true, ctx);
       }
     }
   }
 
-  return addresses.length > 0 ? { bus, addresses } : { bus };
+  return [...byAddr.values()]
+    .sort((a, b) => b.score - a.score || a.order - b.order)
+    .map((c) => c.addr);
 }
 
 /** Parse a CRC polynomial written as an expression, e.g. "1+X 4 +X 5 +X 8"

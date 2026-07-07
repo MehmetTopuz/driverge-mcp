@@ -24,6 +24,8 @@ const PART_PATTERNS: readonly RegExp[] = [
   /\bADXL\d{3}\b/gi, // ADXL345
   /\bMAX\d{4,5}[A-Z]?\b/gi, // MAX30102
   /\bMLX\d{5}[A-Z]*\b/gi, // MLX90614
+  /\bMPU-?\d{4}\b/gi, // MPU-9250, MPU6050, MPU6500 (InvenSense/TDK)
+  /\bICM-?\d{5}\b/gi, // ICM-20948, ICM-42605 (InvenSense/TDK)
 ];
 
 /** The most frequently occurring vendor part token, uppercased; "" if none. */

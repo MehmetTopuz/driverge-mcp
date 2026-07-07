@@ -265,6 +265,50 @@ describe("extractProtocol", () => {
     const p = extractProtocol([page("This appendix lists mechanical dimensions and pinout only.")]);
     expect(p.bus).toBe("unknown");
   });
+
+  // MPU-9250 field test (raw/DRIVERGE_ISSUES.md A2/A5): the primary I2C address
+  // is written in BINARY ("b110100X" → 0x68/0x69), while a hex 0x0C is the
+  // AK8963 magnetometer sub-device. A hex-only scan grabbed only 0x0C and
+  // hardcoded that wrong address. The binary primary must be captured AND ranked
+  // first so addresses[0] (what codegen hardcodes) is the real device address.
+  it("captures a binary-notation primary address and ranks it ahead of a hex magnetometer sub-address (MPU-9250)", () => {
+    const p = extractProtocol([
+      page(
+        "The I2C interface is used. The slave address of the MPU-9250 is b110100X where the " +
+          "last bit is set by the AD0 pin, so the address is b1101000 or b1101001. " +
+          "The AK8963 magnetometer has an I2C address of 0x0C.",
+      ),
+    ]);
+    expect(p.bus).toBe("I2C");
+    expect(p.addresses?.[0]).toBe("0x68");
+    expect(p.addresses).toContain("0x69");
+    // 0x0C (magnetometer sub-device) is still recorded, but demoted below the primary.
+    expect(p.addresses?.indexOf("0x0C")).toBeGreaterThan(p.addresses?.indexOf("0x68") ?? -1);
+  });
+
+  it("recognizes the 0b/trailing-b binary address spellings", () => {
+    expect(
+      extractProtocol([page("The I2C device address is 0b1101000 by default.")]).addresses,
+    ).toEqual(["0x68"]);
+    expect(
+      extractProtocol([page("The I2C slave address is 1101000b on this part.")]).addresses,
+    ).toEqual(["0x68"]);
+  });
+
+  it("does NOT treat an unmarked 7-bit binary run near 'address' as an address", () => {
+    // No 0b/b marker and no X placeholder — too ambiguous to be an address.
+    const p = extractProtocol([
+      page("The register at this address stores the value 1101000 after reset over I2C."),
+    ]);
+    expect(p.addresses).toBeUndefined();
+  });
+
+  it("still extracts plain hex addresses unchanged (regression: two-address hex sheet keeps order)", () => {
+    const p = extractProtocol([
+      page("The I2C address is 0x76 (SDO low) or 0x77 (SDO high) for this device."),
+    ]);
+    expect(p.addresses).toEqual(["0x76", "0x77"]);
+  });
 });
 
 describe("extractCrc", () => {

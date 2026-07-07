@@ -75,6 +75,38 @@ describe("detectPart", () => {
       ]),
     ).toBe("MLX90614");
   });
+
+  // MPU-9250 field test (raw/DRIVERGE_ISSUES.md, A3): PART_PATTERNS had no
+  // InvenSense/TDK MPU/ICM entry, so "MPU-9250" was never matched and
+  // metadata.part came back "". The hyphen in the datasheet's title spelling
+  // ("MPU-9250") must be tolerated and preserved in the returned token.
+  it("detects the InvenSense/TDK MPU family and keeps the hyphenated spelling (MPU-9250)", () => {
+    expect(
+      detectPart([
+        page(
+          "MPU-9250 Product Specification. The MPU-9250 is a 9-axis MotionTracking device. " +
+            "MPU-9250 combines a gyroscope, accelerometer, and magnetometer.",
+        ),
+      ]),
+    ).toBe("MPU-9250");
+  });
+
+  it("detects the MPU family written without a hyphen (MPU6050)", () => {
+    expect(
+      detectPart([page("The MPU6050 combines a 3-axis gyroscope and accelerometer. MPU6050 device.")]),
+    ).toBe("MPU6050");
+  });
+
+  it("detects the InvenSense/TDK ICM family (ICM-20948)", () => {
+    expect(
+      detectPart([
+        page(
+          "ICM-20948 is the world's lowest-power 9-axis MEMS MotionTracking device. " +
+            "ICM-20948 register map follows.",
+        ),
+      ]),
+    ).toBe("ICM-20948");
+  });
 });
 
 const TMAG = fileURLToPath(new URL("../fixtures/tmag5170-q1.pdf", import.meta.url));
