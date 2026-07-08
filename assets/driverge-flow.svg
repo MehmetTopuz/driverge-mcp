@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="820" viewBox="0 0 1760 820">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16A34A"/>
+    </marker>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="1760" height="820" fill="#ffffff"/>
+
+  <!-- ===== Datasheet PDF (input) ===== -->
+  <rect x="40" y="210" width="200" height="130" rx="12" fill="#F1F5F9" stroke="#64748B" stroke-width="2"/>
+  <text x="140" y="266" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="26" font-weight="bold" fill="#0F172A">Datasheet PDF</text>
+  <text x="140" y="300" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#475569">parsed locally —</text>
+  <text x="140" y="326" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#475569">never uploaded</text>
+
+  <!-- ===== Driverge container ===== -->
+  <rect x="300" y="80" width="1140" height="340" rx="16" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+  <text x="330" y="128" font-family="Segoe UI, Arial, sans-serif" font-size="32" font-weight="bold" fill="#0F172A">Driverge MCP server</text>
+  <text x="330" y="162" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#64748B">deterministic pipeline — no LLM, no API keys, fully local</text>
+
+  <!-- analyze_datasheet -->
+  <rect x="330" y="210" width="230" height="130" rx="12" fill="#DBEAFE" stroke="#2563EB" stroke-width="2"/>
+  <text x="445" y="264" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="22" font-weight="bold" fill="#1E3A8A">analyze_datasheet</text>
+  <text x="445" y="296" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#334155">L1–L5 parse</text>
+  <text x="445" y="322" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#334155">+ validate</text>
+  <circle cx="330" cy="210" r="16" fill="#2563EB"/>
+  <text x="330" y="217" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="bold" fill="#ffffff">1</text>
+
+  <!-- frozen JSON -->
+  <rect x="610" y="210" width="230" height="130" rx="12" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+  <text x="725" y="264" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="22" font-weight="bold" fill="#92400E">frozen JSON</text>
+  <text x="725" y="296" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#334155">validated contract,</text>
+  <text x="725" y="322" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#334155">cached under a ref</text>
+
+  <!-- generate_driver -->
+  <rect x="890" y="210" width="230" height="130" rx="12" fill="#DBEAFE" stroke="#2563EB" stroke-width="2"/>
+  <text x="1005" y="264" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="22" font-weight="bold" fill="#1E3A8A">generate_driver</text>
+  <text x="1005" y="296" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#334155">thin-HAL skeleton</text>
+  <text x="1005" y="322" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#334155">+ TODO markers</text>
+  <circle cx="890" cy="210" r="16" fill="#2563EB"/>
+  <text x="890" y="217" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="bold" fill="#ffffff">2</text>
+
+  <!-- validate_driver -->
+  <rect x="1170" y="210" width="230" height="130" rx="12" fill="#DBEAFE" stroke="#2563EB" stroke-width="2"/>
+  <text x="1285" y="264" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="22" font-weight="bold" fill="#1E3A8A">validate_driver</text>
+  <text x="1285" y="302" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#334155">static lint</text>
+  <circle cx="1170" cy="210" r="16" fill="#2563EB"/>
+  <text x="1170" y="217" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="bold" fill="#ffffff">4</text>
+
+  <!-- ===== Output ===== -->
+  <rect x="1500" y="210" width="220" height="130" rx="12" fill="#DCFCE7" stroke="#16A34A" stroke-width="2"/>
+  <text x="1610" y="266" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="24" font-weight="bold" fill="#14532D">driver.c / .h</text>
+  <text x="1610" y="302" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#334155">reviewed draft</text>
+
+  <!-- ===== Host AI ===== -->
+  <rect x="850" y="600" width="560" height="140" rx="12" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
+  <text x="1130" y="652" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="26" font-weight="bold" fill="#4C1D95">Host AI — Claude, Cursor, any MCP client</text>
+  <text x="1130" y="686" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#334155">fills the TODO(driverge) gaps:</text>
+  <text x="1130" y="712" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" fill="#334155">init sequence · timing quirks · compensation math</text>
+  <circle cx="850" cy="600" r="16" fill="#7C3AED"/>
+  <text x="850" y="607" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="bold" fill="#ffffff">3</text>
+
+  <!-- ===== Arrows ===== -->
+  <!-- PDF -> analyze -->
+  <line x1="240" y1="275" x2="324" y2="275" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+  <!-- analyze -> frozen JSON -->
+  <line x1="560" y1="275" x2="604" y2="275" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+  <!-- frozen JSON -> generate -->
+  <line x1="840" y1="275" x2="884" y2="275" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+  <!-- validate -> output (pass) -->
+  <line x1="1400" y1="275" x2="1494" y2="275" stroke="#16A34A" stroke-width="3" marker-end="url(#arrowGreen)"/>
+  <text x="1448" y="256" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-style="italic" fill="#16A34A">pass</text>
+
+  <!-- generate -> Host AI (down) -->
+  <line x1="1005" y1="340" x2="1005" y2="594" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="985" y="490" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-style="italic" fill="#475569">driver skeleton</text>
+  <text x="985" y="516" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-style="italic" fill="#475569">+ fill_in_brief</text>
+
+  <!-- Host AI -> validate (up) -->
+  <line x1="1285" y1="600" x2="1285" y2="346" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="1305" y="460" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-style="italic" fill="#475569">completed</text>
+  <text x="1305" y="486" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-style="italic" fill="#475569">driver</text>
+
+  <!-- validate -> Host AI (fail loop, dashed) -->
+  <path d="M 1390 344 C 1480 430, 1480 540, 1420 636" fill="none" stroke="#475569" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#arrow)"/>
+  <text x="1490" y="500" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-style="italic" fill="#475569">fail ↻</text>
+
+  <!-- ===== Footer ===== -->
+  <text x="880" y="792" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="21" font-style="italic" fill="#64748B">Same ref, any target — portable · ESP32 · STM32 — re-renders with no re-parse.</text>
+</svg>

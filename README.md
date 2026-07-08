@@ -11,15 +11,19 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-server-black">
 </p>
 
-> 🧪 **Closed beta** — [`driverge-mcp`](https://www.npmjs.com/package/driverge-mcp)
-> is published to npm under the `beta` dist-tag; install the beta channel with
-> **`npx -y driverge-mcp@beta`**. It is **not yet hardware-verified through the
-> release gate** — generated drivers are reviewed *drafts*, not certified
-> firmware. APIs and the JSON schema may still change before the stable **v0.1.0**.
-> See **[Maturity & status](#maturity--status)**, and **[BETA.md](BETA.md)** if
-> you're testing.
+> 🧪 **Closed beta** — install with **`npm i driverge-mcp@beta`** or run directly
+> with `npx -y driverge-mcp@beta`. Generated drivers are reviewed *drafts*, not
+> hardware-certified firmware, and the JSON schema may still change before the
+> stable **v0.1.0** — see [Maturity & status](#maturity--status), and
+> [BETA.md](BETA.md) if you're testing.
 
 ---
+
+**Contents:** [What is Driverge?](#what-is-driverge) ·
+[Quick start](#quick-start) · [Why Driverge?](#why-driverge) ·
+[What it does](#what-it-does) · [Maturity & status](#maturity--status) ·
+[Concepts](#concepts-behind-driverge) · [Installation](#installation) ·
+[Usage](#usage) · [Troubleshooting](#troubleshooting) · [Roadmap](#roadmap)
 
 ## What is Driverge?
 
@@ -28,10 +32,14 @@ that turns an IC datasheet PDF into an embedded C/C++ driver. It plugs into any
 MCP-capable host — Claude Desktop, Claude Code (VS Code), Cursor, and others.
 
 Its guiding principle: **deterministic code parses and validates; the host AI
-reasons.** Driverge itself contains **no internal LLM and needs no API keys** — a
-TypeScript pipeline extracts a *validated, structured JSON* model of the chip, and
-the host AI you're already talking to fills in the reasoning-heavy parts (init
-sequence, vendor quirks, docs). Your datasheet never leaves your machine.
+reasons.** Driverge contains **no internal LLM and needs no API keys** — a
+TypeScript pipeline extracts a *validated, structured JSON* model of the chip,
+and the host AI you're already talking to fills in the reasoning-heavy parts
+(init sequence, vendor quirks, docs). Your datasheet never leaves your machine.
+
+<p align="center">
+  <img src="assets/driverge-flow.png" alt="How Driverge works: a datasheet PDF flows through the deterministic analyze → frozen JSON → generate → validate pipeline; the host AI fills the TODO(driverge) gaps and the loop repeats until validation passes, producing driver.c/.h" width="760">
+</p>
 
 ## Quick start
 
@@ -58,30 +66,22 @@ That's it — no clone, no build, no API key. Details in
 
 Bringing up a new sensor or IC means hand-transcribing dozens of register
 addresses, bit-field masks, and command codes out of a 40-page PDF — slow work,
-and a classic source of silent bugs (one wrong mask or transposed address and the
-driver "works" but reads garbage). Driverge does that mechanical part
-deterministically and leaves the reasoning to the AI you already use.
+and a classic source of silent bugs (one wrong mask and the driver "works" but
+reads garbage). Driverge does that mechanical part deterministically and leaves
+the judgment to the AI you already use.
 
-- **No hallucinated register maps.** Addresses, bit-field masks, and command codes
-  are *extracted from the datasheet and validated* — not guessed. That's the
-  failure mode of "just ask an LLM to write the whole driver"; here, invalid or
-  incomplete data is rejected before it ever reaches code generation.
-- **Bring your own client — no API keys, no lock-in.** Driverge is a plain MCP
-  server with no embedded LLM. It runs inside whatever MCP client you already use
-  (Claude Desktop, Claude Code, Cursor, …) and reasons with the model you're
-  already paying for — no separate subscription or service.
-- **Private & offline.** The datasheet is parsed locally and never uploaded — safe
-  for NDA'd or unreleased parts.
+- **No hallucinated register maps.** Addresses, masks, and command codes are
+  *extracted from the datasheet and validated* — not guessed. Invalid or
+  incomplete data is rejected before it can become code.
+- **Bring your own client — private by design.** A plain MCP server with no
+  embedded LLM: it reasons with the model you're already paying for, and the
+  datasheet is parsed locally, never uploaded — safe for NDA'd parts.
 - **Deterministic & reproducible.** The same PDF always yields the same JSON and
-  the same driver skeleton — reviewable, diff-able, and testable, not a one-shot
-  black box.
+  the same driver skeleton — reviewable, diff-able, and testable.
 - **Portable by construction.** One driver core targets any platform through a
-  tiny per-bus thin-HAL seam (2–3 functions); the native targets (STM32, ESP32)
-  pre-fill that seam for you — switch platforms without touching driver logic.
-- **The AI does only what it's good at.** Register geometry is deterministic;
-  init-sequence ordering, timing quirks, and compensation math need judgment.
-  Driverge marks exactly those spots with `TODO(driverge)` and a `fill_in_brief`,
-  the host AI completes them, then `validate_driver` checks the result.
+  tiny per-bus thin-HAL seam; native targets (STM32, ESP32) pre-fill it. The AI
+  completes only the marked `TODO(driverge)` gaps, and `validate_driver` checks
+  the result.
 
 **Good for:** quickly evaluating a new sensor, prototyping, porting an existing
 driver to a different MCU, or just learning an unfamiliar chip's register map.
@@ -93,43 +93,38 @@ driver to a different MCU, or just learning an unfamiliar chip's register map.
    commands + CRC) and the bus protocol into a **frozen JSON contract**, gated by
    a validator.
 2. **Generate** a driver for a target platform, in C or C++: a deterministic
-   **thin-HAL skeleton** — register/bit-field constants, the per-bus thin-HAL
-   seam, function stubs — with every reasoning gap marked `TODO(driverge)` plus a `fill_in_brief`
-   telling the host AI exactly what to complete.
-3. **Validate** the completed driver: thin-HAL purity, no leftover TODOs, register
-   references exist, bit-field masks match the JSON.
+   **thin-HAL skeleton** — register/bit-field constants, the per-bus seam,
+   function stubs — with every reasoning gap marked `TODO(driverge)` plus a
+   `fill_in_brief` telling the host AI exactly what to complete.
+3. **Validate** the completed driver: thin-HAL purity, no leftover TODOs,
+   register references exist, bit-field masks match the JSON.
 
 ### Supported targets
 
-Every target specializes the same portable **[thin-HAL](https://en.wikipedia.org/wiki/Hardware_abstraction_layer)**
-seam — the driver core is identical across platforms; only the seam implementation
+Every target specializes the same portable
+**[thin-HAL](https://en.wikipedia.org/wiki/Hardware_abstraction_layer)** seam —
+the driver core is identical across platforms; only the seam implementation
 changes.
 
 | Target | Bus binding | Buses | Language | Maturity |
 |---|---|---|---|---|
-| **Portable (thin-HAL)** | user-implemented `hal_*` seam | I²C, SPI, UART, CAN | C / C++ | **Beta** |
-| **ESP32** | ESP-IDF (`i2c_master_*`, `spi_master`, `uart`, TWAI) | I²C, SPI, UART, CAN | C / C++ | **Experimental** |
-| **STM32** | CubeHAL (`HAL_I2C_*`, `HAL_SPI_*` + GPIO CS, `HAL_UART_*`) | I²C, SPI, UART | C / C++ | **Experimental** |
+| **Portable (thin-HAL)** | user-implemented `hal_*` seam | I²C, SPI, UART, CAN | C / C++ | **Beta** — host-tested, gcc-compiled in CI; not yet on hardware |
+| **ESP32** | ESP-IDF (`i2c_master_*`, `spi_master`, `uart`, TWAI) | I²C, SPI, UART, CAN | C / C++ | **Experimental** — one informal I²C bring-up; SPI/UART/CAN never on hardware |
+| **STM32** | CubeHAL (`HAL_I2C_*`, `HAL_SPI_*` + GPIO CS, `HAL_UART_*`) | I²C, SPI, UART | C / C++ | **Experimental** — never on hardware |
 | **Arduino** | `Wire` / `SPI` | — | C++ | not implemented |
 
-"Maturity" here is *codegen* maturity vs. *hardware-verified* maturity — see
-[Maturity & status](#maturity--status) for exactly what has and hasn't run on
-silicon. STM32 CAN is planned (the bxCAN/FDCAN family split needs its own pass); asking
-a target for a bus it doesn't support fails fast with a clear
+STM32 CAN is planned (the bxCAN/FDCAN family split needs its own pass); asking a
+target for a bus it doesn't support fails fast with a clear
 `UnsupportedBusError` rather than emitting a wrong seam. Pass
 `language: "cpp"` to `generate_driver` for a class-based C++ driver
 (`.hpp`/`.cpp`) instead of the default C output — same registers, same seam,
-same validation.
-
-> ⚠️ **Generated code is a strong draft, not a certified driver.** Init sequences,
-> compensation formulas, and timing quirks are completed by the host AI and
-> **must be reviewed** before use on hardware. Not safety-certified.
+same validation. What "Beta" and "Experimental" mean exactly is spelled out in
+[Maturity & status](#maturity--status).
 
 ### Verified parts
 
 The extraction pipeline is regression-tested against real datasheets from
-**12 manufacturers**. Parts with fully automatic extraction (registers *and*
-bit-fields, or a clean command set):
+**12 manufacturers**. Parts with fully automatic extraction:
 
 | Part | Manufacturer | Kind | Extracted |
 |---|---|---|---|
@@ -143,50 +138,35 @@ bit-fields, or a clean command set):
 
 Other tested parts (ADXL345, MLX90614, AEAT-8811, PCA9685, VL53L3CX, TLE5014)
 extract **partially** or **defer** to the host AI — the pipeline says so
-explicitly instead of guessing, and the generated skeleton tells the host AI
-what to complete. The full, always-current matrix lives in the
+explicitly instead of guessing. The full, always-current matrix lives in the
 [coverage scorecard](tests/scorecard/scorecard.snap.md).
 
 ## Maturity & status
 
-Driverge is in **closed beta** (`0.1.0-beta.x`, npm `beta` dist-tag). Here is
-exactly what that means — what's proven, what isn't, and how much to trust the
-output.
+Driverge is in **closed beta** (`0.1.0-beta.x`, npm `beta` dist-tag).
 
 **Proven today (host-level):**
 - The full deterministic test suite is green (440-plus tests) on a clean
-  TypeScript build.
-- The **portable** driver is compiled by a real `gcc` gate in CI.
-- The extraction pipeline is regression-tested against **13 real datasheets**,
-  and reports its own coverage honestly — **7 fully extracted, 3 partial, 3
-  deferred** to the host AI (see the
-  [coverage scorecard](tests/scorecard/scorecard.snap.md)).
+  TypeScript build, and the **portable** driver is compiled by a real `gcc`
+  gate in CI.
+- The extraction pipeline is regression-tested against **13 real datasheets**
+  and reports its own coverage honestly — 7 fully extracted, 3 partial, 3
+  deferred (see the [coverage scorecard](tests/scorecard/scorecard.snap.md)).
 
 **Not yet proven — this is the beta → v0.1.0 gate:**
-- **On-hardware behavior is not gated.** Only one informal ESP32 bring-up has run
-  (MPU-9250, hand-completed), and it surfaced the bus-error and address bugs
-  fixed in this release. There is no clean, repeatable hardware pass yet, and
-  **STM32 has never run on silicon.**
-- The **native** ESP32/STM32 seams are not yet built by an automated compile gate
+- **On-hardware behavior is not gated.** Only one informal ESP32 bring-up has
+  run (MPU-9250, hand-completed); there is no clean, repeatable hardware pass
+  yet, and STM32 has never run on silicon.
+- The native ESP32/STM32 seams are not yet built by an automated compile gate
   (ESP-IDF / CubeIDE) — only the portable target is.
 - Only one MCP client has been exercised end-to-end.
 
-**Per-target maturity:**
-
-| Target | Buses with any on-hardware exposure | Maturity |
-|---|---|---|
-| Portable (thin-HAL) | I²C (host-compiled only) | **Beta** — host-tested + gcc-compiled, not on hardware |
-| ESP32 (ESP-IDF) | I²C (one informal bring-up) | **Experimental** — codegen shipped; SPI/UART/CAN never on hardware |
-| STM32 (CubeHAL) | none | **Experimental** — codegen shipped; never on hardware |
-| Arduino · STM32 CAN | — | **Not implemented** |
-
-> Treat every generated driver as a **reviewed draft**: check register addresses,
-> the init sequence, and any compensation math against the datasheet before you
-> flash it. Driverge is not safety-certified.
+> ⚠️ Treat every generated driver as a **reviewed draft**: check register
+> addresses, the init sequence, and any compensation math against the datasheet
+> before you flash it. Driverge is not safety-certified.
 
 **Testing the beta?** [BETA.md](BETA.md) has the identity-register smoke test to
-run and how to send a field report — the MPU-9250 report in
-`raw/DRIVERGE_ISSUES.md` is the template.
+run and how to send a field report.
 
 ## Concepts behind Driverge
 
@@ -194,34 +174,16 @@ Driverge splits driver-writing into two kinds of work: the **mechanical part**
 (register addresses, masks, command tables — extracted and checked by
 deterministic code) and the **judgment part** (init ordering, timing quirks,
 compensation math — completed by the host AI). Everything below exists to keep
-that boundary sharp.
-
-```mermaid
-flowchart LR
-  PDF["Datasheet PDF"]
-  subgraph D["Driverge — deterministic, no LLM"]
-    A["analyze_datasheet<br>L1–L5 parse + validate"]
-    J[("frozen JSON<br>cached under a ref")]
-    G["generate_driver<br>thin-HAL skeleton +<br>TODO(driverge) markers"]
-    V["validate_driver<br>static lint"]
-  end
-  subgraph H["Host AI — reasoning"]
-    F["fill the TODOs: init sequence,<br>quirks, compensation docs"]
-  end
-  OUT["driver.c / driver.h"]
-  PDF --> A --> J --> G --> F --> V
-  V -->|pass| OUT
-  V -->|fail| F
-```
+that boundary sharp; the diagram at the top of this page shows how the pieces
+connect.
 
 ### Deterministic core, reasoning at the edge
 
 Register geometry is mechanical: an address is right or wrong, a mask either
 matches the datasheet or it doesn't. Driverge handles that part with plain
-TypeScript — no internal LLM, no API keys, no sampling — so the output is the
-same on every run. What genuinely needs judgment (in what order to poke the
-registers, which timing quirk applies, how to document a compensation formula)
-is left to the host AI you're already talking to.
+TypeScript — no sampling, so the output is the same on every run. What genuinely
+needs judgment (in what order to poke the registers, which timing quirk applies)
+is left to the host AI.
 
 ### The frozen JSON contract
 
@@ -253,20 +215,13 @@ else:
 | UART | `hal_uart_write`, `hal_uart_read` |
 | CAN | `hal_can_transfer` (one call = one frame exchange) |
 
-The register-access transfer seams (`hal_i2c_*`, `hal_spi_transfer`,
-`hal_can_transfer`) return `int` — **`0` on success, non-zero on a bus error**
-(NACK, timeout) — and `<part>_read_register`/`_write_register` **propagate** that
-status, so a failed transfer surfaces to the caller instead of being silently
-swallowed. (`hal_uart_read` returns the byte count actually read; `hal_delay_ms`
-is `void`.) A native seam (ESP32, STM32) returns its vendor status directly
-(`esp_err_t`/`HAL_OK`-mapped), which is already `0` on success.
-
-The driver core is therefore identical across platforms; a native target
-(ESP32, STM32) just pre-fills the seam with the vendor calls.
-`validate_driver` enforces this purity: a driver that calls a vendor peripheral
-API outside the seam fails the lint. Buses with no universal register-access
-primitive (UART, CAN) keep the same discipline — the device-specific framing is
-a marked `TODO(driverge)` reasoning gap (`framing_todo`), completed by the host
+The transfer seams return `int` — **`0` on success, non-zero on a bus error**
+(NACK, timeout) — and the generated register accessors propagate that status
+instead of swallowing it; native seams (ESP32, STM32) return their vendor
+status, which is already `0` on success. `validate_driver` enforces seam
+purity: a driver that calls a vendor peripheral API outside the seam fails the
+lint. Buses with no universal register-access primitive (UART, CAN) get their
+device-specific framing as a marked `TODO(driverge)` gap, completed by the host
 AI and then linted.
 
 ### The fill-in loop
@@ -281,10 +236,17 @@ matching the JSON — and the loop repeats until it passes.
 
 **Prerequisites:** Node.js LTS (≥ 18; CI-tested on Node 20 & 22).
 
-Add Driverge to your MCP client (no build step —
-[npx](https://docs.npmjs.com/cli/commands/npx) fetches and runs it):
+Install the beta from npm:
 
-**Claude Desktop** — `claude_desktop_config.json`:
+```bash
+npm i driverge-mcp@beta
+```
+
+Or skip the install entirely — the config below launches Driverge via
+[npx](https://docs.npmjs.com/cli/commands/npx), which downloads it from npm on
+first run, caches it, and starts it automatically each time the client does
+(`-y` skips npx's install prompt). Add one entry to your MCP client's config:
+
 ```json
 {
   "mcpServers": {
@@ -293,37 +255,22 @@ Add Driverge to your MCP client (no build step —
 }
 ```
 
-**Claude Code (VS Code)** — `.mcp.json` in your workspace root:
-```json
-{
-  "mcpServers": {
-    "driverge": { "command": "npx", "args": ["-y", "driverge-mcp"] }
-  }
-}
-```
-
-**Cursor** — `.cursor/mcp.json`:
-```json
-{
-  "mcpServers": {
-    "driverge": { "command": "npx", "args": ["-y", "driverge-mcp"] }
-  }
-}
-```
-
-Other clients (Codex, Gemini CLI, …) take the same `command` + `args` pair in
-their own MCP config.
+| Client | Config file |
+|---|---|
+| Claude Desktop | `claude_desktop_config.json` |
+| Claude Code (VS Code) | `.mcp.json` in your workspace root |
+| Cursor | `.cursor/mcp.json` |
+| Others (Codex, Gemini CLI, …) | same `command` + `args` pair in their own MCP config |
 
 > **Beta testers:** pin the beta channel explicitly with `["-y",
 > "driverge-mcp@beta"]` as the `args`. Plain `driverge-mcp` resolves the npm
 > `latest` tag, which deliberately lags the beta during closed beta.
 
-**No clone, no global install.** The config above tells your MCP client to
-launch `npx -y driverge-mcp`; npx downloads Driverge from the npm registry on
-first run, caches it, and starts it automatically each time the client does
-(`-y` skips npx's install prompt). You never run it by hand — to confirm it's
-wired up, ask your client to run the `ping` tool, which replies `pong`. Cloning
-the repo (below) is only for development.
+You never run the server by hand — to confirm it's wired up, ask your client to
+run the `ping` tool, which replies `pong`. On Windows, prefer writing the
+config file directly over `claude mcp add` — see
+[Troubleshooting](#troubleshooting). Cloning the repo (below) is only for
+development.
 
 ### Configuration
 
@@ -347,30 +294,6 @@ Set it in the MCP config's `env` block, e.g.:
 
 Without `out_dir` the generated files are returned in the tool result only —
 no disk writes, no configuration needed.
-
-### Windows & npx notes
-
-The config blocks above (writing `.mcp.json` / `claude_desktop_config.json`
-**directly**) are the most reliable way to add Driverge on Windows. A few
-environment-specific snags worth knowing:
-
-- **Prefer editing the config file over `claude mcp add … -- npx -y driverge-mcp`.**
-  The `-y` after `npx` can be parsed by the `claude` CLI itself
-  (`unknown option '-y'`) rather than passed through. Writing the JSON block
-  directly sidesteps it. (`-y` still belongs in the `args` array, as shown above —
-  it only misbehaves as a bare CLI flag.)
-- **PowerShell 5.1 + `claude mcp add-json`.** Nested double-quotes in the inline
-  JSON can get mangled before the CLI sees them (`Invalid configuration: Invalid
-  input`). Again, write the `.mcp.json` file directly instead of passing JSON on
-  the command line.
-- **Spawning the server yourself?** On Windows, launching `npx.cmd` from Node
-  needs `shell: true` (otherwise `spawn EINVAL`) — Node no longer runs `.cmd`
-  shims without a shell. MCP clients handle this for you; this only bites custom
-  smoke-test scripts.
-- **"Pending approval" in `claude mcp list`.** A project-scope `.mcp.json` may show
-  as `⏸ Pending approval` in a separate `claude mcp list` process while the
-  `driverge` tools are already callable in your active session — the listing lags
-  the running session, it does not mean the server failed to load.
 
 ### Run from source (development)
 
@@ -413,13 +336,11 @@ Give your MCP client a datasheet and ask it to build a driver. The typical flow:
 Reusing the same `ref` with a different `target` re-renders with **no re-parse**.
 
 **Completing a `deferred` datasheet.** When `analyze_datasheet` reports
-`extraction: deferred` (the register/command section was detected but not
-auto-extracted — common for split product-spec/register-map documents), the host
-AI reconstructs the map from the `driverge://datasheet/<ref>` resource and
-**persists it back** with `validate_datasheet({ "ref": "…", "json": { … } })` —
-passing **both** `ref` and the completed `json` overwrites the cached datasheet
-under that `ref`. The next `generate_driver({ "ref": "…" })` then renders the real
-registers instead of a TODO stub. This closes the loop without re-analyzing.
+`extraction: deferred`, the host AI reconstructs the register map from the
+`driverge://datasheet/<ref>` resource and persists it back with
+`validate_datasheet({ "ref": "…", "json": { … } })` — passing **both** `ref` and
+the completed `json` overwrites the cached datasheet under that `ref`, so the
+next `generate_driver` renders the real registers instead of a TODO stub.
 
 ### Worked example — BME280 → portable driver
 
@@ -463,7 +384,7 @@ datasheet prose, and `validate_driver` checks the result.
 | Tool | `analyze_datasheet` | PDF → validated JSON, cached under a `ref` |
 | Tool | `generate_driver` | `ref` + `target` → driver skeleton + `fill_in_brief` |
 | Tool | `validate_driver` | static-lint a completed driver against its `ref` |
-| Tool | `validate_datasheet` | re-run the L5 validator over a `ref` or JSON; passing **both** `ref` + `json` persists the completed datasheet under that `ref` |
+| Tool | `validate_datasheet` | re-run the validator over a `ref` or JSON; passing **both** persists the completed datasheet under that `ref` |
 | Tool | `ping` | health check — confirms the server is running |
 | Resource | `driverge://datasheet/<ref>` | full parsed JSON for an analyzed datasheet |
 | Resource | `driverge://schema` | the frozen datasheet JSON-Schema contract |
@@ -487,16 +408,27 @@ datasheet prose, and `validate_driver` checks the result.
 - **`UnsupportedBusError` on a native target.** The target doesn't support that
   part's bus yet (today that means CAN on STM32, or a bus the parser couldn't
   identify). Generate the **portable** target instead and implement its seam.
+- **Windows: prefer editing the config file over the `claude mcp add` CLI.**
+  `claude mcp add … -- npx -y driverge-mcp` can eat the `-y` itself (`unknown
+  option '-y'`), and PowerShell 5.1 mangles the nested quotes in `claude mcp
+  add-json`. Writing the JSON block directly into `.mcp.json` /
+  `claude_desktop_config.json` sidesteps both.
+- **Windows: spawning the server from your own script.** Launching `npx.cmd`
+  from Node needs `shell: true` (otherwise `spawn EINVAL`). MCP clients handle
+  this for you; it only bites custom smoke-test scripts.
+- **"Pending approval" in `claude mcp list`.** A project-scope `.mcp.json` may
+  show as `⏸ Pending approval` in a separate `claude mcp list` process while
+  the `driverge` tools are already callable in your active session — the
+  listing lags the running session.
 
 ## Roadmap
 
 - **v0.x** — one reference sensor (BME280), portable thin-HAL core, MCP surface,
   multiple clients. ✅
 - **v0.y** — native codegen: ESP32 ✅, STM32 ✅ *(on-hardware verification is the
-  beta → v0.1.0 gate — see [Maturity & status](#maturity--status))*, Arduino (next);
-  multi-manufacturer extraction ✅ (12 vendors tested — see
-  [Verified parts](#verified-parts)); multi-bus seam families (I²C, SPI, UART,
-  CAN) ✅; C or C++ output ✅. *(current)*
+  beta → v0.1.0 gate)*, Arduino (next); multi-manufacturer extraction ✅
+  (12 vendors — see [Verified parts](#verified-parts)); multi-bus seam families
+  (I²C, SPI, UART, CAN) ✅; C or C++ output ✅. *(current)*
 - **v1.0** — broader vendor/part coverage, STM32 CAN (bxCAN/FDCAN), and a
   stable, versioned JSON schema.
 
