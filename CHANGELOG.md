@@ -9,8 +9,14 @@ Entries are grouped by the commit area vocabulary from
 
 ## [Unreleased]
 
-Fixes surfaced by an end-to-end field test against the MPU-9250 Product
-Specification (see the field report in `raw/DRIVERGE_ISSUES.md`).
+## [0.1.0-beta.1] - 2026-07-08
+
+First **closed-beta** release, published to npm under the `beta` dist-tag —
+install with `npx driverge-mcp@beta`. `latest` deliberately stays on `0.0.1`
+until the stable **v0.1.0** graduation gate is met (real-hardware L3 +
+native-compile L2 + two-client L4 — see `BETA.md`). Contents: fixes surfaced by
+an end-to-end field test against the MPU-9250 Product Specification (see the
+field report in `raw/DRIVERGE_ISSUES.md`).
 
 ### Breaking
 
@@ -150,5 +156,6 @@ launch. Contents = the accumulated changes below.
   Linux/macOS/Windows on Node 20 & 22.
 - Project docs: full README, `SECURITY.md`, `CODE_OF_CONDUCT.md`, ESLint config.
 
-[Unreleased]: https://github.com/MehmetTopuz/driverge-mcp/compare/v0.0.1...main
+[Unreleased]: https://github.com/MehmetTopuz/driverge-mcp/compare/v0.1.0-beta.1...main
+[0.1.0-beta.1]: https://github.com/MehmetTopuz/driverge-mcp/compare/v0.0.1...v0.1.0-beta.1
 [0.0.1]: https://github.com/MehmetTopuz/driverge-mcp/releases/tag/v0.0.1

@@ -7,13 +7,17 @@
   <a href="https://www.npmjs.com/package/driverge-mcp"><img alt="npm" src="https://img.shields.io/npm/v/driverge-mcp"></a>
   <a href="https://github.com/MehmetTopuz/driverge-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MehmetTopuz/driverge-mcp/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-blue"></a>
-  <img alt="status" src="https://img.shields.io/badge/status-pre--release-orange">
+  <img alt="status" src="https://img.shields.io/badge/status-closed%20beta-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-server-black">
 </p>
 
-> 🚧 **Early pre-release** — [`driverge-mcp`](https://www.npmjs.com/package/driverge-mcp)
-> is on npm, so the `npx driverge-mcp` install below works today. APIs and the
-> JSON schema may still change before v0.1.0; expect rough edges.
+> 🧪 **Closed beta** — [`driverge-mcp`](https://www.npmjs.com/package/driverge-mcp)
+> is published to npm under the `beta` dist-tag; install the beta channel with
+> **`npx -y driverge-mcp@beta`**. It is **not yet hardware-verified through the
+> release gate** — generated drivers are reviewed *drafts*, not certified
+> firmware. APIs and the JSON schema may still change before the stable **v0.1.0**.
+> See **[Maturity & status](#maturity--status)**, and **[BETA.md](BETA.md)** if
+> you're testing.
 
 ---
 
@@ -101,14 +105,16 @@ Every target specializes the same portable **[thin-HAL](https://en.wikipedia.org
 seam — the driver core is identical across platforms; only the seam implementation
 changes.
 
-| Target | Bus binding | Buses | Language | Status |
+| Target | Bus binding | Buses | Language | Maturity |
 |---|---|---|---|---|
-| **Portable (thin-HAL)** | user-implemented `hal_*` seam | I²C, SPI, UART, CAN | C / C++ | ✅ |
-| **ESP32** | ESP-IDF (`i2c_master_*`, `spi_master`, `uart`, TWAI) | I²C, SPI, UART, CAN | C / C++ | ✅ |
-| **STM32** | CubeHAL (`HAL_I2C_*`, `HAL_SPI_*` + GPIO CS, `HAL_UART_*`) | I²C, SPI, UART | C / C++ | ✅ |
-| **Arduino** | `Wire` / `SPI` | — | C++ | planned |
+| **Portable (thin-HAL)** | user-implemented `hal_*` seam | I²C, SPI, UART, CAN | C / C++ | **Beta** |
+| **ESP32** | ESP-IDF (`i2c_master_*`, `spi_master`, `uart`, TWAI) | I²C, SPI, UART, CAN | C / C++ | **Experimental** |
+| **STM32** | CubeHAL (`HAL_I2C_*`, `HAL_SPI_*` + GPIO CS, `HAL_UART_*`) | I²C, SPI, UART | C / C++ | **Experimental** |
+| **Arduino** | `Wire` / `SPI` | — | C++ | not implemented |
 
-STM32 CAN is planned (the bxCAN/FDCAN family split needs its own pass); asking
+"Maturity" here is *codegen* maturity vs. *hardware-verified* maturity — see
+[Maturity & status](#maturity--status) for exactly what has and hasn't run on
+silicon. STM32 CAN is planned (the bxCAN/FDCAN family split needs its own pass); asking
 a target for a bus it doesn't support fails fast with a clear
 `UnsupportedBusError` rather than emitting a wrong seam. Pass
 `language: "cpp"` to `generate_driver` for a class-based C++ driver
@@ -140,6 +146,47 @@ extract **partially** or **defer** to the host AI — the pipeline says so
 explicitly instead of guessing, and the generated skeleton tells the host AI
 what to complete. The full, always-current matrix lives in the
 [coverage scorecard](tests/scorecard/scorecard.snap.md).
+
+## Maturity & status
+
+Driverge is in **closed beta** (`0.1.0-beta.x`, npm `beta` dist-tag). Here is
+exactly what that means — what's proven, what isn't, and how much to trust the
+output.
+
+**Proven today (host-level):**
+- The full deterministic test suite is green (440-plus tests) on a clean
+  TypeScript build.
+- The **portable** driver is compiled by a real `gcc` gate in CI.
+- The extraction pipeline is regression-tested against **13 real datasheets**,
+  and reports its own coverage honestly — **7 fully extracted, 3 partial, 3
+  deferred** to the host AI (see the
+  [coverage scorecard](tests/scorecard/scorecard.snap.md)).
+
+**Not yet proven — this is the beta → v0.1.0 gate:**
+- **On-hardware behavior is not gated.** Only one informal ESP32 bring-up has run
+  (MPU-9250, hand-completed), and it surfaced the bus-error and address bugs
+  fixed in this release. There is no clean, repeatable hardware pass yet, and
+  **STM32 has never run on silicon.**
+- The **native** ESP32/STM32 seams are not yet built by an automated compile gate
+  (ESP-IDF / CubeIDE) — only the portable target is.
+- Only one MCP client has been exercised end-to-end.
+
+**Per-target maturity:**
+
+| Target | Buses with any on-hardware exposure | Maturity |
+|---|---|---|
+| Portable (thin-HAL) | I²C (host-compiled only) | **Beta** — host-tested + gcc-compiled, not on hardware |
+| ESP32 (ESP-IDF) | I²C (one informal bring-up) | **Experimental** — codegen shipped; SPI/UART/CAN never on hardware |
+| STM32 (CubeHAL) | none | **Experimental** — codegen shipped; never on hardware |
+| Arduino · STM32 CAN | — | **Not implemented** |
+
+> Treat every generated driver as a **reviewed draft**: check register addresses,
+> the init sequence, and any compensation math against the datasheet before you
+> flash it. Driverge is not safety-certified.
+
+**Testing the beta?** [BETA.md](BETA.md) has the identity-register smoke test to
+run and how to send a field report — the MPU-9250 report in
+`raw/DRIVERGE_ISSUES.md` is the template.
 
 ## Concepts behind Driverge
 
@@ -266,6 +313,10 @@ Add Driverge to your MCP client (no build step —
 
 Other clients (Codex, Gemini CLI, …) take the same `command` + `args` pair in
 their own MCP config.
+
+> **Beta testers:** pin the beta channel explicitly with `["-y",
+> "driverge-mcp@beta"]` as the `args`. Plain `driverge-mcp` resolves the npm
+> `latest` tag, which deliberately lags the beta during closed beta.
 
 **No clone, no global install.** The config above tells your MCP client to
 launch `npx -y driverge-mcp`; npx downloads Driverge from the npm registry on
@@ -441,7 +492,8 @@ datasheet prose, and `validate_driver` checks the result.
 
 - **v0.x** — one reference sensor (BME280), portable thin-HAL core, MCP surface,
   multiple clients. ✅
-- **v0.y** — native targets: ESP32 ✅, STM32 ✅, Arduino (next);
+- **v0.y** — native codegen: ESP32 ✅, STM32 ✅ *(on-hardware verification is the
+  beta → v0.1.0 gate — see [Maturity & status](#maturity--status))*, Arduino (next);
   multi-manufacturer extraction ✅ (12 vendors tested — see
   [Verified parts](#verified-parts)); multi-bus seam families (I²C, SPI, UART,
   CAN) ✅; C or C++ output ✅. *(current)*
