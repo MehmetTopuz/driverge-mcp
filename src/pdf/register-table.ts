@@ -204,8 +204,10 @@ function normalizeAddress(raw: string): string {
   return m ? `0x${m[1].toUpperCase().padStart(2, "0")}` : raw;
 }
 
-/** "1111 1111"/"0000 0000" -> "0xFF"/"0x00". */
-function normalizeReset(raw: string): string {
+/** "1111 1111"/"0000 0000" -> "0xFF"/"0x00". Exported for reuse by other
+ *  adapters whose reset cells share this same binary-octet idiom (see
+ *  ti-command-byte.ts). */
+export function normalizeReset(raw: string): string {
   const bits = raw.replace(/\s+/g, "");
   if (/^[01]{8}$/.test(bits)) {
     return `0x${Number.parseInt(bits, 2).toString(16).toUpperCase().padStart(2, "0")}`;

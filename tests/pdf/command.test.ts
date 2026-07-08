@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { extractCommands, extractCrc, extractProtocol } from "../../src/pdf/command";
+import {
+  extractCommands,
+  extractCrc,
+  extractI2cAddresses,
+  extractProtocol,
+} from "../../src/pdf/command";
 
 const page = (text: string) => ({ index: 1, text, items: [], hasImage: false });
 
@@ -355,5 +360,41 @@ describe("extractCommands", () => {
 
   it("does not treat the CRC example value as a command", () => {
     expect(byCode["0xBEEF"]).toBeUndefined();
+  });
+});
+
+// Field-test diagnosis (TI TCA6408A-Q1, SCPS234A p.24, "Table 8-3. Address
+// Reference"): TI spells its two ADDR-pin-selectable target addresses as a
+// decimal/hex PAIR — "NN (decimal), NN (hexadecimal)" — rather than a bare
+// "0xNN" or binary-notation token, so neither of extractI2cAddresses's
+// existing passes (hex-literal, binary-literal) finds anything on this sheet
+// today. Text order is the L row first, so 0x20 (not 0x21) must stay primary.
+describe("extractI2cAddresses — TI 'NN (decimal), NN (hexadecimal)' idiom", () => {
+  it("extracts both addresses from TI's decimal/hex address-reference idiom (TCA6408A-Q1 Table 8-3, verbatim rendering)", () => {
+    const text =
+      "... Address Table 8-3 shows the TCA6408A-Q1 address reference. " +
+      "Table 8-3. Address Reference ADDR I 2 C BUS TARGET ADDRESS L 32 (decimal), " +
+      "20 (hexadecimal) H 33 (decimal), 21 (hexadecimal) The last bit of the target " +
+      "address defines the operation (read or write) to be performed. A high (1) " +
+      "selects a read operation, while a low (0) selects a write operation.";
+    expect(extractI2cAddresses(text)).toEqual(["0x20", "0x21"]);
+  });
+
+  // Guard: a lone "NN (decimal)" mention with no paired "(hexadecimal)" must
+  // NOT synthesize an address — only a genuine decimal/hex PAIR counts.
+  it("does not synthesize an address from a lone decimal mention with no paired '(hexadecimal)'", () => {
+    const text =
+      "The register at this address holds a running sample count, typically " +
+      "reaching address 32 (decimal) after a few seconds of continuous operation.";
+    expect(extractI2cAddresses(text)).toEqual([]);
+  });
+
+  // Regression guard: the pre-existing hex-literal scan (used throughout this
+  // file via extractProtocol) must be unaffected by adding the new idiom.
+  it("still extracts plain hex addresses directly (regression: unrelated to the new TI idiom pass)", () => {
+    expect(extractI2cAddresses("The I2C address is 0x44 (default) or 0x45.")).toEqual([
+      "0x44",
+      "0x45",
+    ]);
   });
 });

@@ -63,6 +63,11 @@ export function createServer(): McpServer {
 
 async function main(): Promise<void> {
   const server = createServer();
+  // stdio transport owns stdout exclusively — any stray dependency (or future
+  // debug console.log) writing to stdout would corrupt JSON-RPC framing. Route
+  // console.log/info to stderr instead, where nothing but human eyes read it.
+  console.log = console.error.bind(console);
+  console.info = console.error.bind(console);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

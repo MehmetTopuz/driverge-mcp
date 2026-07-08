@@ -13,6 +13,7 @@ import { detectPart } from "../pdf/part.js";
 import { extractProseCommands } from "../pdf/prose-commands.js";
 import { findRegisterTable } from "../pdf/register-table.js";
 import { findStBitFields } from "../pdf/st-bit-layout.js";
+import { findTiCommandByteTable } from "../pdf/ti-command-byte.js";
 import { findTiRegisterMap } from "../pdf/ti-register-map.js";
 import type { InterfaceKind, PageContent, PdfAnalysis } from "../pdf/types.js";
 import type { DatasheetJson, DeviceInterface, Extraction } from "./types.js";
@@ -32,6 +33,12 @@ function buildInterface(pages: PageContent[], kind: string): DeviceInterface {
   let registers = findRegisterTable(pages)?.registers ?? [];
   if (registers.length === 0) {
     registers = findTiRegisterMap(pages)?.registers ?? [];
+  }
+  // TI's OTHER register-table shape (see ti-command-byte): a per-bit Command
+  // Byte encoding table rather than an Offset|Acronym summary. Tried only when
+  // the Offset|Acronym adapter above found nothing, same slot pattern.
+  if (registers.length === 0) {
+    registers = findTiCommandByteTable(pages)?.registers ?? [];
   }
   // Maxim's register-matrix shape (see maxim-register-map): tried after TI's
   // summary-table adapter and before the role-based generic fallback, same

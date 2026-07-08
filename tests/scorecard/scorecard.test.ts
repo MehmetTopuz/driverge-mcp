@@ -26,6 +26,7 @@ const FIXTURES = [
   "pca9685.pdf",
   "mlx90614.pdf",
   "max30102.pdf",
+  "tca6408a-q1.pdf",
 ] as const;
 
 const fixturePath = (f: string) =>

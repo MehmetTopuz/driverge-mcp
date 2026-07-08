@@ -22,6 +22,7 @@ To run the datasheet-driven tests, drop the PDFs here with these names:
 | `mlx90614.pdf` | Melexis MLX90614 (IR temperature sensor) | Melexis datasheet (melexis.com) |
 | `max30102.pdf` | Maxim MAX30102 (pulse oximeter/heart-rate sensor) | Analog Devices/Maxim datasheet (MikroE mirror) |
 | `mpu9250.pdf` | InvenSense/TDK MPU-9250 (9-axis IMU, I2C/SPI) | InvenSense Product Specification PS-MPU-9250A-01 |
+| `tca6408a-q1.pdf` | TI TCA6408A-Q1 (I2C GPIO expander) | Texas Instruments datasheet (SCPS234A) — field-test fixture for the TI decimal/hex address idiom and the "Command Byte" register-table shape |
 
 Tests that need a fixture skip themselves when the file is absent, so the suite
 stays green on a fresh clone. The pure unit tests and the synthetic-PDF

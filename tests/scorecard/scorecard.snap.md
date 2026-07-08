@@ -15,3 +15,4 @@
 | pca9685.pdf | PCA9685 | NXP | register_map | I2C | 0 | 0 | 0 | deferred | yes |
 | mlx90614.pdf | MLX90614 | Melexis | register_map | I2C | 7 | 0 | 0 | partial | yes |
 | max30102.pdf | MAX30102 | Maxim Integrated | register_map | I2C | 20 | 33 | 0 | complete | yes |
+| tca6408a-q1.pdf | TCA6408A | Texas Instruments | register_map | I2C | 4 | 0 | 0 | partial | yes |

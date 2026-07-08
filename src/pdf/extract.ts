@@ -9,6 +9,7 @@
 // getOperatorList() there would be wasted work on the majority of pages in a
 // real datasheet.
 
+import { fileURLToPath } from "node:url";
 import { getDocument, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { MIN_TEXT_CHARS } from "./classify.js";
 import type { PageContent, PositionedText } from "./types.js";
@@ -19,6 +20,29 @@ const IMAGE_OPS: ReadonlySet<number> = new Set([
   OPS.paintImageMaskXObject,
 ]);
 
+// Resolved once at module scope from the installed pdfjs-dist package
+// location (works from BOTH src/ under ts-node/vitest and the built dist/
+// layout, since both just resolve the same node_modules package). Without
+// these, pdfjs-dist warns once per non-embedded standard font and once per
+// wasm-decoded image (field-tested: 48 warnings parsing TI's TCA6408A-Q1
+// sheet, SCPS234A) and falls back to lower-fidelity glyph/image paths.
+//
+// Deliberately a plain filesystem path, NOT the `file://` URL (`.href`) an
+// earlier draft used: pdfjs's Node runtime (NodeBinaryDataFactory._fetch)
+// hands this string straight to `fs.readFile(url)`, which only special-cases
+// actual `URL` *objects* — a `file://...` *string* is treated as a literal
+// (and invalid) path, so every font/wasm fetch 404s. `fileURLToPath` avoids
+// that, but on Windows it yields backslashes, and pdfjs's own
+// `getFactoryUrlProp` rejects any factory URL that doesn't end in a literal
+// "/" — hence the `\` -> `/` normalization below (Node's fs, like Win32
+// itself, accepts forward slashes in paths on every platform). Trailing
+// slashes are REQUIRED — pdfjs resolves file names by concatenation.
+const PDFJS_ENTRY = import.meta.resolve("pdfjs-dist/legacy/build/pdf.mjs");
+const toFactoryPath = (relative: string) =>
+  fileURLToPath(new URL(relative, PDFJS_ENTRY)).replace(/\\/g, "/");
+const STANDARD_FONT_DATA_URL = toFactoryPath("../../standard_fonts/");
+const WASM_URL = toFactoryPath("../../wasm/");
+
 export async function extractPages(data: Uint8Array): Promise<PageContent[]> {
   // S3 hardening note: earlier pdfjs-dist versions accepted `isEvalSupported`
   // to stop it from `new Function(...)`-evaluating embedded Type3/PostScript
@@ -27,7 +51,11 @@ export async function extractPages(data: Uint8Array): Promise<PageContent[]> {
   // of node_modules/pdfjs-dist finds no `isEvalSupported` or `new Function(`
   // left in the bundle — so there is nothing left here to opt out of. Flagged
   // to the orchestrator; revisit if a future pdfjs-dist bump reintroduces it.
-  const task = getDocument({ data });
+  const task = getDocument({
+    data,
+    standardFontDataUrl: STANDARD_FONT_DATA_URL,
+    wasmUrl: WASM_URL,
+  });
   const pdf = await task.promise;
   try {
     const pages: PageContent[] = [];

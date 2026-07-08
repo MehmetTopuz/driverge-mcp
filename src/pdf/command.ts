@@ -92,6 +92,14 @@ export function extractProtocol(pages: PageContent[]): Protocol {
 // pin-selectable LSB (e.g. AD0). "b110100X", "0b1101000", "1101000b" all match.
 const BINARY_ADDRESS = /\b(0b|b)?([01]{6}[01xX])(b)?\b/gi;
 
+// TI's decimal/hex address-PAIR idiom (Table 8-3 "Address Reference": "ADDR
+// I2C BUS TARGET ADDRESS L 32 (decimal), 20 (hexadecimal) H 33 (decimal), 21
+// (hexadecimal)"). The comma between the pairs is optional (some sheets omit
+// it); requiring the trailing "(hexadecimal)" label is what keeps a lone
+// "NN (decimal)" mention from ever matching.
+const TI_DECIMAL_HEX_PAIR =
+  /\b\d{1,3}\s*\(decimal\),?\s*([0-9a-f]{1,2})\s*\(hexadecimal\)/gi;
+
 // Context words that mark a SECONDARY sub-device address rather than the part's
 // own primary bus address — the MPU-9250 case, where 0x0C is the AK8963
 // magnetometer behind the main device (raw/DRIVERGE_ISSUES.md A2). Kept narrow
@@ -109,11 +117,16 @@ const SUBDEVICE_CONTEXT =
  * sub-device address (the AK8963 magnetometer, 0x0C) in hex, so the old
  * hex-only scan grabbed the wrong one (raw/DRIVERGE_ISSUES.md A2/A5).
  *
- * Two passes keep it safe: hex first (preserving the pre-existing text order of
- * hex-only sheets byte-for-byte), then binary. A small stable relevance score
- * then floats the primary up: +1 for a binary-notation match (the primary's
- * usual form on these sheets), -2 for a magnetometer/sub-device context. Equal
- * scores keep first-seen order, so hex-only sheets are unchanged.
+ * Three passes keep it safe: hex first (preserving the pre-existing text order
+ * of hex-only sheets byte-for-byte), then binary, then TI's decimal/hex PAIR
+ * idiom ("NN (decimal), NN (hexadecimal)" — TCA6408A-Q1's Table 8-3 "Address
+ * Reference"; neither the hex-literal nor binary-notation pass finds anything
+ * on that sheet, since the address is spelled entirely in prose). A small
+ * stable relevance score then floats the primary up: +1 for a binary-notation
+ * match (the primary's usual form on those sheets), +1 for an explicit
+ * "(hexadecimal)" label (an unambiguous primary-address signal, at least as
+ * strong as the binary form's), -2 for a magnetometer/sub-device context.
+ * Equal scores keep first-seen order, so hex-only sheets are unchanged.
  */
 export function extractI2cAddresses(text: string): string[] {
   interface Candidate {
@@ -124,11 +137,17 @@ export function extractI2cAddresses(text: string): string[] {
   const byAddr = new Map<string, Candidate>();
   let order = 0;
 
-  const consider = (addr: string, fromBinary: boolean, ctx: string): void => {
+  const consider = (
+    addr: string,
+    fromBinary: boolean,
+    ctx: string,
+    fromHexLabel = false,
+  ): void => {
     const value = Number.parseInt(addr, 16);
     if (value < 0x08 || value > 0x77) return; // outside the usable 7-bit space
     let score = 0;
     if (fromBinary) score += 1;
+    if (fromHexLabel) score += 1;
     if (SUBDEVICE_CONTEXT.test(ctx)) score -= 2;
     const existing = byAddr.get(addr);
     if (existing) {
@@ -169,6 +188,18 @@ export function extractI2cAddresses(text: string): string[] {
         consider(`0x${value.toString(16).toUpperCase().padStart(2, "0")}`, true, ctx);
       }
     }
+  }
+  // Pass 3 — TI's "NN (decimal), NN (hexadecimal)" paired idiom (Table 8-3
+  // "Address Reference", TCA6408A-Q1). Scanned over the FULL text, not the
+  // "address"-anchored windows above: the idiom's own anchor keyword is
+  // "(hexadecimal)", not "address", and a sheet's second pair can sit well
+  // past a 60-char window from the first "address" mention. Requiring the
+  // decimal/hexadecimal PAIRING (not a bare "(decimal)") keeps a lone decimal
+  // mention from ever synthesizing an address.
+  for (const m of text.matchAll(TI_DECIMAL_HEX_PAIR)) {
+    const start = m.index ?? 0;
+    const ctx = text.slice(Math.max(0, start - 32), start + m[0].length);
+    consider(`0x${m[1].toUpperCase()}`, false, ctx, true);
   }
 
   return [...byAddr.values()]
