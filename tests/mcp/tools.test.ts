@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -595,5 +595,73 @@ describe("generate_driver out_dir confinement", () => {
     expect((result as ToolResult).isError).toBeFalsy();
     expect(existsSync(join(dest, "bme280.h"))).toBe(true);
     expect(existsSync(join(dest, "bme280.c"))).toBe(true);
+  });
+});
+
+// DoS hardening: analyze_datasheet must not read an unbounded file into memory.
+// The cap is overridable per-call via DRIVERGE_MAX_PDF_BYTES (read at call
+// time), mirroring the DRIVERGE_OUT_ROOT convention above — save/restore the
+// prior value exactly like that block does so this suite never leaks env
+// state into other test files.
+describe("analyze_datasheet PDF size cap (DoS hardening)", () => {
+  const savedMaxBytes = process.env.DRIVERGE_MAX_PDF_BYTES;
+  let dir: string | undefined;
+
+  beforeEach(() => {
+    clearDatasheetCache();
+  });
+
+  afterEach(() => {
+    if (savedMaxBytes === undefined) delete process.env.DRIVERGE_MAX_PDF_BYTES;
+    else process.env.DRIVERGE_MAX_PDF_BYTES = savedMaxBytes;
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+      dir = undefined;
+    }
+  });
+
+  it("rejects a file larger than DRIVERGE_MAX_PDF_BYTES with a clear size-limit error, without attempting to parse it", async () => {
+    dir = mkdtempSync(join(tmpdir(), "driverge-size-cap-"));
+    const oversizePath = join(dir, "oversize.pdf");
+    // 11 bytes > the 10-byte cap set below. Content is deliberately NOT a real
+    // PDF — the whole point is that the size check must reject this BEFORE any
+    // parse is attempted, so a garbage byte string is sufficient to prove it:
+    // if the handler ever fell through to analyzePdfFile, the error message
+    // would be "failed to parse PDF: ..." instead of a size-limit message.
+    writeFileSync(oversizePath, "not-a-pdf!!");
+    process.env.DRIVERGE_MAX_PDF_BYTES = "10";
+
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "analyze_datasheet",
+      arguments: { pdf_path: oversizePath },
+    });
+    expect((result as ToolResult).isError).toBe(true);
+    expect(firstText(result)).toMatch(/too large|exceeds|size limit/i);
+    expect(firstText(result)).not.toMatch(/failed to parse PDF/i);
+  });
+
+  // Companion guard for the OTHER side of the boundary: a file at/under the
+  // cap must NOT be rejected on size grounds — the handler should fall
+  // through to its normal parse path. We can't assert a real analysis here
+  // without a genuine PDF fixture (out of scope for this cheap host-level
+  // check — see the Session 10 / Contract A note above at ~L418-422 for the
+  // same tradeoff), but we CAN assert the failure mode differs: a small
+  // under-cap file should fail with a PARSE error, never the size-limit
+  // message, proving the cap didn't misfire on legitimate small input.
+  it("does not apply the size-limit error to a file under DRIVERGE_MAX_PDF_BYTES (falls through to normal parsing)", async () => {
+    dir = mkdtempSync(join(tmpdir(), "driverge-size-cap-"));
+    const smallPath = join(dir, "small.pdf");
+    writeFileSync(smallPath, "not-a-pdf!!"); // 11 bytes
+    process.env.DRIVERGE_MAX_PDF_BYTES = "1000"; // well over 11 bytes
+
+    const client = await connectClient();
+    const result = await client.callTool({
+      name: "analyze_datasheet",
+      arguments: { pdf_path: smallPath },
+    });
+    expect((result as ToolResult).isError).toBe(true);
+    expect(firstText(result)).not.toMatch(/too large|exceeds|size limit/i);
+    expect(firstText(result)).toMatch(/failed to parse PDF/i);
   });
 });

@@ -30,7 +30,7 @@ export const MAX_CACHE_ENTRIES = 32;
  * doesn't silently serve a stale cached entry from before the hint existed.
  */
 export function computeRef(pdfPath: string, mtimeMs: number, extra?: string): string {
-  const hash = createHash("sha1")
+  const hash = createHash("sha256")
     .update(`${pdfPath}:${Math.round(mtimeMs)}:${extra ?? ""}`)
     .digest("hex");
   return `ds_${hash.slice(0, 12)}`;

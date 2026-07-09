@@ -92,6 +92,11 @@ const text = (value: unknown, isError = false): TextResult => ({
 // meaningful on every platform, not just Windows (B3).
 const WINDOWS_ABSOLUTE = /^[a-zA-Z]:[\\/]/;
 
+// DoS hardening: analyze_datasheet must not read an unbounded file into
+// memory. 64 MiB comfortably covers real-world datasheets while still
+// bounding worst-case memory/CPU from a hostile or accidental huge input.
+const DEFAULT_MAX_PDF_BYTES = 64 * 1024 * 1024;
+
 /**
  * Confines a single artifact file path (`DriverArtifact.files[].path`) under
  * `rootDir`, returning the resolved absolute path when it is safely inside
@@ -147,12 +152,25 @@ export function registerDrivergeTools(server: McpServer): void {
     async ({ pdf_path, manufacturer_hint, interface_kind_hint }) => {
       // Single stat call (not existsSync + statSync) to close the TOCTOU gap
       // where the file could vanish/change between the check and the read (S4).
-      let mtimeMs: number;
+      let stat: ReturnType<typeof statSync>;
       try {
-        mtimeMs = statSync(pdf_path).mtimeMs;
+        stat = statSync(pdf_path);
       } catch {
         return text(`file not found: ${pdf_path}`, true);
       }
+      // DoS hardening: read the cap at call time (like DRIVERGE_OUT_ROOT below,
+      // in the generate_driver handler) so tests can scope it per-case via
+      // DRIVERGE_MAX_PDF_BYTES; `|| DEFAULT_MAX_PDF_BYTES` also covers an
+      // unset/empty/non-numeric env value (Number("") and Number(undefined)
+      // are both falsy-ish here — NaN is falsy for `||`).
+      const maxBytes = Number(process.env.DRIVERGE_MAX_PDF_BYTES) || DEFAULT_MAX_PDF_BYTES;
+      if (stat.size > maxBytes) {
+        return text(
+          `PDF too large: ${stat.size} bytes exceeds the ${maxBytes}-byte limit (set DRIVERGE_MAX_PDF_BYTES to change it)`,
+          true,
+        );
+      }
+      const mtimeMs = stat.mtimeMs;
       // Fold the hints into the ref material (Session 10 / Contract A): the ref
       // is otherwise path+mtime only, so re-analyzing the same file with
       // different hints would silently serve a hint-less cached entry.
