@@ -9,7 +9,7 @@
 
 import { registerWidth, type Register } from "../pdf/types.js";
 import type { Command, DatasheetJson } from "../schema/types.js";
-import { HEX_ONLY, commentSafe, fieldMask, macro, maskHex, slug } from "./ident.js";
+import { HEX_ONLY, commentSafe, fieldMask, hexOrUndefined, macro, maskHex, slug } from "./ident.js";
 import type { DriverArtifact, FillInBrief, GeneratedFile } from "./types.js";
 
 // Exported: the "cpp" language flavor (see portable-cpp.ts) renders the SAME
@@ -268,7 +268,7 @@ function registerDriver(
   const uart = busKind === "UART";
   const can = busKind === "CAN";
   const seam = BUS_SEAM[busKind];
-  const addr = json.protocol.addresses?.[0];
+  const addr = hexOrUndefined(json.protocol.addresses?.[0]);
   const guard = `${prefix}_H`;
   const type = `${name}_t`;
 
@@ -466,7 +466,7 @@ function commandDriver(
   const uart = json.protocol.bus === "UART";
   const can = json.protocol.bus === "CAN";
   const noAddrBus = uart || can; // neither UART nor CAN has a bus device address
-  const addr = json.protocol.addresses?.[0];
+  const addr = hexOrUndefined(json.protocol.addresses?.[0]);
   const crc = commands.find((c) => c.crc)?.crc;
   const guard = `${prefix}_H`;
   const type = `${name}_t`;
@@ -529,7 +529,12 @@ function commandDriver(
     }
   }
 
-  if (crc) {
+  // A non-hex crc.poly/init (e.g. containing an embedded newline) must never
+  // reach a #define as a live value (define-injection fix) — only emit the
+  // block when BOTH are well-formed hex literals; skip it entirely otherwise
+  // (crc8Body/commandBrief still reference the macro NAMES, not the raw
+  // values, so no injected content survives as code either way).
+  if (crc && hexOrUndefined(crc.poly) && hexOrUndefined(crc.init)) {
     header.push(
       "",
       `/* CRC-${crc.width} checksum parameters. */`,

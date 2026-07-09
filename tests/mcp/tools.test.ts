@@ -361,6 +361,49 @@ describe("Driverge MCP surface", () => {
     expect(header.content).not.toMatch(/could not auto-extract/);
   });
 
+  // Security fix (2026-07-09) — Layer C end-to-end pin for the
+  // define-injection vulnerability (see tests/codegen/define-injection.test.ts
+  // for Layer A / tests/schema/validate.test.ts for Layer B of the same fix).
+  // Today, DATASHEET_JSON_GUARD leaves protocol.addresses unchecked and
+  // validateDatasheet never checks its format either, so a poisoned
+  // (non-hex, newline-embedded) addresses[0] persists with
+  // `validation.valid: true`; generate_driver then only gates on
+  // `validation.valid` and happily emits the poison into the .h/.c files
+  // (see the Layer A test for the resulting live `#define ADDR_PWNED 1`).
+  // Contract: validate_datasheet(ref, json) must persist `validation.valid:
+  // false` for a poisoned addresses[0], and the subsequent generate_driver(ref)
+  // call must refuse codegen ("validation failed"), exactly like the existing
+  // "generate_driver refuses codegen when validation failed" pin above.
+  it("validate_datasheet(ref, json) rejects a poisoned non-hex protocol.addresses[0], and generate_driver then refuses codegen (define-injection fix)", async () => {
+    const client = await connectClient();
+    const poisonedRef = "ds_test_poisoned_addr";
+    // Seed the cache the same way the existing A4 deferred-loop test does
+    // (putDatasheet with a benign baseline entry) before the host "completes"
+    // it with a poisoned value via validate_datasheet(ref, json).
+    putDatasheet({ ref: poisonedRef, pdfPath: "/x/poisoned.pdf", json: validJson });
+
+    const poisonedJson = {
+      ...validJson,
+      protocol: { bus: "I2C" as const, addresses: ["0x76\n#define ADDR_PWNED 1"] },
+    };
+
+    const validateResult = await client.callTool({
+      name: "validate_datasheet",
+      arguments: { ref: poisonedRef, json: poisonedJson },
+    });
+    const validated = JSON.parse(firstText(validateResult));
+    expect(validated.persisted).toBe(true);
+    expect(validated.validation.valid).toBe(false);
+    expect(validated.validation.errors.join(" ")).toMatch(/address/i);
+
+    const genResult = await client.callTool({
+      name: "generate_driver",
+      arguments: { ref: poisonedRef, target: "portable" },
+    });
+    expect((genResult as ToolResult).isError).toBe(true);
+    expect(firstText(genResult)).toMatch(/validation failed/);
+  });
+
   it("validate_datasheet rejects malformed JSON with a clean error, not a raw TypeError", async () => {
     const client = await connectClient();
     const result = await client.callTool({

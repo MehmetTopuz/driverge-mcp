@@ -60,7 +60,7 @@ const INTERFACE_SCHEMA = z.discriminatedUnion("kind", [
 ]);
 const DATASHEET_JSON_GUARD = z.object({
   metadata: z.looseObject({ part: z.string() }),
-  protocol: z.looseObject({ bus: z.string() }),
+  protocol: z.looseObject({ bus: z.string(), addresses: z.array(z.string()).optional() }),
   interface: INTERFACE_SCHEMA,
   extraction: z
     .object({

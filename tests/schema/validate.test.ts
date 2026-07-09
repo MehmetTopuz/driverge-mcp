@@ -223,6 +223,111 @@ describe("validateDatasheet — graceful degradation (extraction status)", () =>
   });
 });
 
+// Security fix (2026-07-09) — Layer B validator gate for the define-injection
+// vulnerability (see tests/codegen/define-injection.test.ts for the Layer A
+// codegen-boundary tests of the same fix). Two free-text value families reach
+// a generated `#define` line completely unchecked today: protocol.addresses
+// (used for `#define <PREFIX>_I2C_ADDR <value>`) and command crc.poly/init
+// (used for `#define <PREFIX>_CRC_POLY/_CRC_INIT <value>`). Neither is
+// format-checked anywhere in validateDatasheet today, so a non-hex value
+// (e.g. one with an embedded newline that would splice arbitrary C into the
+// generated header) sails through with `valid: true`. Contract: any
+// non-HEX_ONLY (`/^0x[0-9a-f]+$/i`) protocol.addresses entry, or any
+// non-HEX_ONLY command crc.poly/crc.init, must push an ERROR (valid: false).
+// register `r.address` and command `c.code` are deliberately NOT re-tested
+// here — both are already HEX_ONLY-gated in the codegen layer (see the
+// orchestrator's spec) and are out of scope for this fix.
+describe("validateDatasheet — protocol.addresses / crc format (security fix, define-injection)", () => {
+  it("rejects a non-hex protocol.addresses entry (register_map)", () => {
+    const ds = {
+      ...base,
+      protocol: { bus: "I2C" as const, addresses: ["0x76\n#define ADDR_PWNED 1", "0x77"] },
+      interface: {
+        kind: "register_map" as const,
+        registers: [reg("id", "0xD0", "0x60", [bf("chip_id", 7, 0)])],
+      },
+    };
+    const r = validateDatasheet(ds as unknown as DatasheetJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/address/i);
+  });
+
+  it("rejects a non-hex protocol.addresses entry (command_set)", () => {
+    const ds = {
+      ...base,
+      protocol: { bus: "I2C" as const, addresses: ["0x44\nint pwned;"] },
+      interface: {
+        kind: "command_set" as const,
+        commands: [{ name: "measure", code: "0x2C06" }],
+      },
+    };
+    const r = validateDatasheet(ds as unknown as DatasheetJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/address/i);
+  });
+
+  it("still accepts a well-formed register map with well-formed hex addresses (no false positive)", () => {
+    const r = validateDatasheet(
+      registerDs([reg("id", "0xD0", "0x60", [bf("chip_id", 7, 0)])]),
+    );
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects a non-hex command crc.poly on a data-returning command", () => {
+    const ds = {
+      ...base,
+      interface: {
+        kind: "command_set" as const,
+        commands: [
+          {
+            name: "measure",
+            code: "0x2C06",
+            responseWords: 2,
+            crc: { poly: "0x00\nint crc_pwned;", init: "0xFF", width: 8 },
+          },
+        ],
+      },
+    };
+    const r = validateDatasheet(ds as unknown as DatasheetJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/crc/i);
+  });
+
+  it("rejects a non-hex command crc.init on a data-returning command", () => {
+    const ds = {
+      ...base,
+      interface: {
+        kind: "command_set" as const,
+        commands: [
+          {
+            name: "measure",
+            code: "0x2C06",
+            responseWords: 2,
+            crc: { poly: "0x31", init: "not-hex", width: 8 },
+          },
+        ],
+      },
+    };
+    const r = validateDatasheet(ds as unknown as DatasheetJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/crc/i);
+  });
+
+  it("still accepts a well-formed command set with well-formed hex crc.poly/init (no false positive)", () => {
+    const r = validateDatasheet(
+      commandDs([
+        {
+          name: "measure",
+          code: "0x2C06",
+          responseWords: 2,
+          crc: { poly: "0x31", init: "0xFF", width: 8 },
+        } as never,
+      ]),
+    );
+    expect(r.valid).toBe(true);
+  });
+});
+
 // Session C — CAN joins the Bus enum. protocol.bus "CAN" must validate through
 // the SAME validator API (validateDatasheet) as I2C/SPI/UART — no bus-specific
 // carve-out — and must NOT trip the generic "protocol.bus is unknown" warning

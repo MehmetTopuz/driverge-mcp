@@ -3,6 +3,18 @@
 
 export const HEX_ONLY = /^0x[0-9a-f]+$/i;
 
+/**
+ * Returns `s` unchanged iff it is a well-formed hex literal (HEX_ONLY),
+ * otherwise `undefined`. Used at the codegen boundary (defense-in-depth,
+ * alongside the schema/validate.ts validator gate) to stop a non-hex,
+ * newline-embedded free-text value (e.g. a poisoned protocol.addresses[0] or
+ * command crc.poly/init) from ever being spliced verbatim into a generated
+ * `#define` line — see the define-injection security fix.
+ */
+export function hexOrUndefined(s: string | undefined): string | undefined {
+  return s !== undefined && HEX_ONLY.test(s) ? s : undefined;
+}
+
 /** Lower-snake identifier safe for filenames/symbols; "device" when empty. */
 export function slug(part: string): string {
   const s = part

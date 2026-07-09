@@ -23,6 +23,17 @@ export function validateDatasheet(d: DatasheetJson): ValidationResult {
   if (!d.metadata.part) warnings.push("metadata.part is empty");
   if (d.protocol.bus === "unknown") warnings.push("protocol.bus is unknown");
 
+  // Security fix (define-injection, Layer B): protocol.addresses[0] is spliced
+  // verbatim into a generated `#define <PREFIX>_I2C_ADDR <value>` line (see
+  // src/codegen/portable.ts / portable-cpp.ts). A non-hex value — e.g. one
+  // with an embedded newline — must fail validation outright, not just be
+  // neutralized defensively at the codegen boundary (Layer A).
+  for (const address of d.protocol.addresses ?? []) {
+    if (!HEX_ONLY.test(address)) {
+      errors.push(`protocol.address "${address}" is not a valid hex literal`);
+    }
+  }
+
   const status = d.extraction?.status;
   const pages = d.extraction?.detectedPages ?? [];
 
@@ -149,6 +160,17 @@ function validateCommands(
     }
     if (!c.crc) {
       warnings.push(`${c.name}: CRC parameters missing`);
+    } else {
+      // Security fix (define-injection, Layer B): crc.poly/init are spliced
+      // verbatim into generated `#define <PREFIX>_CRC_POLY/_INIT <value>`
+      // lines (see src/codegen/portable.ts / portable-cpp.ts commandDriver).
+      // A non-hex value must fail validation outright.
+      if (!HEX_ONLY.test(c.crc.poly)) {
+        errors.push(`${c.name}: invalid CRC poly "${c.crc.poly}"`);
+      }
+      if (!HEX_ONLY.test(c.crc.init)) {
+        errors.push(`${c.name}: invalid CRC init "${c.crc.init}"`);
+      }
     }
   }
 

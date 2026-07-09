@@ -19,7 +19,7 @@
 
 import { registerWidth, type Register } from "../pdf/types.js";
 import type { Command, DatasheetJson } from "../schema/types.js";
-import { commentSafe, macro, pascalCase, slug } from "./ident.js";
+import { commentSafe, hexOrUndefined, macro, pascalCase, slug } from "./ident.js";
 import {
   AUTOGEN,
   BUS_SEAM,
@@ -129,7 +129,7 @@ function registerDriverCpp(
   const can = busKind === "CAN";
   const seam = BUS_SEAM[busKind];
   const cppSeam = cppBusSeam(busKind, prefix);
-  const addr = json.protocol.addresses?.[0];
+  const addr = hexOrUndefined(json.protocol.addresses?.[0]);
   const guard = `${prefix}_HPP`;
   const className = pascalCase(name);
 
@@ -245,7 +245,7 @@ function commandDriverCpp(
   const uart = json.protocol.bus === "UART";
   const can = json.protocol.bus === "CAN";
   const noAddrBus = uart || can;
-  const addr = json.protocol.addresses?.[0];
+  const addr = hexOrUndefined(json.protocol.addresses?.[0]);
   const crc = commands.find((c) => c.crc)?.crc;
   const guard = `${prefix}_HPP`;
   const className = pascalCase(name);
@@ -296,7 +296,10 @@ function commandDriverCpp(
     }
   }
 
-  if (crc) {
+  // See portable.ts commandDriver's identical comment: a non-hex crc.poly/init
+  // must never reach a #define as a live value (define-injection fix) — only
+  // emit the block when both are well-formed hex literals.
+  if (crc && hexOrUndefined(crc.poly) && hexOrUndefined(crc.init)) {
     hpp.push(
       "",
       `/* CRC-${crc.width} checksum parameters. */`,
