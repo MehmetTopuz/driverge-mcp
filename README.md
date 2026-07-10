@@ -113,9 +113,11 @@ changes.
 | **STM32** | CubeHAL (`HAL_I2C_*`, `HAL_SPI_*` + GPIO CS, `HAL_UART_*`) | I²C, SPI, UART | C / C++ | **Experimental** — never on hardware |
 | **Arduino** | `Wire` / `SPI` | — | C++ | not implemented |
 
-STM32 CAN is planned (the bxCAN/FDCAN family split needs its own pass); asking a
-target for a bus it doesn't support fails fast with a clear
-`UnsupportedBusError` rather than emitting a wrong seam. Pass
+STM32 CAN is planned (the bxCAN/FDCAN family split needs its own pass), and a
+next wave of native targets — RP2040/RP2350, TI MSPM0, NXP MCX/i.MX RT,
+Nuvoton NuMicro, Microchip PIC, and eventually Zephyr — is on the
+[Roadmap](#roadmap). Asking a target for a bus it doesn't support fails fast
+with a clear `UnsupportedBusError` rather than emitting a wrong seam. Pass
 `language: "cpp"` to `generate_driver` for a class-based C++ driver
 (`.hpp`/`.cpp`) instead of the default C output — same registers, same seam,
 same validation. What "Beta" and "Experimental" mean exactly is spelled out in
@@ -431,6 +433,13 @@ datasheet prose, and `validate_driver` checks the result.
   (I²C, SPI, UART, CAN) ✅; C or C++ output ✅. *(current)*
 - **v1.0** — broader vendor/part coverage, STM32 CAN (bxCAN/FDCAN), and a
   stable, versioned JSON schema.
+- **v1.x** — new native MCU targets (same portable thin-HAL core, one seam
+  file per platform; prioritized by beta-tester demand): **RP2040/RP2350**
+  (pico-sdk), **TI MSPM0** (DriverLib), **NXP MCX / i.MX RT** (MCUXpresso
+  `fsl_lpi2c`/`fsl_lpspi`), **Nuvoton NuMicro** (BSP Standard Driver), and
+  **Microchip PIC** (MCC Melody for 8/16-bit; Harmony v3 for PIC32).
+- **Later** — a **Zephyr** meta-target (devicetree-based `i2c`/`spi` API):
+  one seam covering Nordic nRF and every other Zephyr-supported vendor.
 
 Day-to-day progress is tracked in the [CHANGELOG](CHANGELOG.md).
 
