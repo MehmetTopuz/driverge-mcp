@@ -9,6 +9,42 @@ Entries are grouped by the commit area vocabulary from
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-07-10
+
+Closed-beta iteration, published to npm under the `beta` dist-tag
+(`npx driverge-mcp@beta`); `latest` deliberately stays on `0.0.1` until the
+v0.1.0 graduation gate is met. Contents: two deferred security-audit items and
+the restructured README that ships in the tarball.
+
+### Security
+
+- **Codegen / Validation:** closed a `#define` **source-injection** hole:
+  free-text `protocol.addresses[0]` and command CRC `poly`/`init` values were
+  spliced verbatim into generated `#define` lines, so a poisoned datasheet JSON
+  passed to `validate_datasheet(ref, json)` could inject macros/source into the
+  generated `.h`/`.hpp`. Non-hex values are now rejected by the validator
+  (`valid: false`, so `generate_driver` refuses at the intended gate) and
+  sanitized at the generators (falling through to the existing safe
+  TODO/`0x00` placeholder branch). Output is byte-identical for all well-formed
+  inputs.
+- **MCP Server:** `analyze_datasheet` now enforces a **PDF size cap** before
+  reading the file — default 64 MiB, overridable via `DRIVERGE_MAX_PDF_BYTES` —
+  returning a clean "PDF too large" error instead of an unbounded allocation.
+
+### Changed
+
+- **MCP Server:** the content-ref hash behind `ds_<12hex>` refs moved from
+  SHA-1 to **SHA-256** (hygiene); the ref shape and cache semantics are
+  unchanged.
+
+### Docs
+
+- **README:** restructured from 518 to 359 lines — one merged maturity table,
+  a single MCP config block plus a per-client path table, Windows/`npx` notes
+  folded into Troubleshooting — and `npm i driverge-mcp@beta` documented as the
+  install command. The mermaid flowchart is replaced with
+  `assets/driverge-flow.png` (SVG source alongside) so npmjs.com renders it.
+
 ## [0.1.0-beta.1] - 2026-07-08
 
 First **closed-beta** release, published to npm under the `beta` dist-tag —
@@ -156,6 +192,7 @@ launch. Contents = the accumulated changes below.
   Linux/macOS/Windows on Node 20 & 22.
 - Project docs: full README, `SECURITY.md`, `CODE_OF_CONDUCT.md`, ESLint config.
 
-[Unreleased]: https://github.com/MehmetTopuz/driverge-mcp/compare/v0.1.0-beta.1...main
+[Unreleased]: https://github.com/MehmetTopuz/driverge-mcp/compare/v0.1.0-beta.2...main
+[0.1.0-beta.2]: https://github.com/MehmetTopuz/driverge-mcp/compare/v0.1.0-beta.1...v0.1.0-beta.2
 [0.1.0-beta.1]: https://github.com/MehmetTopuz/driverge-mcp/compare/v0.0.1...v0.1.0-beta.1
 [0.0.1]: https://github.com/MehmetTopuz/driverge-mcp/releases/tag/v0.0.1
