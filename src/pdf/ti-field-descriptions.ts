@@ -3,7 +3,9 @@
 // separately from the register-summary table parsed by ti-register-map: each is
 // titled "Table 7-N. <ACRONYM> Register Field Descriptions" and lists one field
 // per row as `Bit | Field | Type | Reset | Description`, where Bit is a single
-// index ("15") or a range ("14-12"). Bits reach 15, so these are 16-bit registers.
+// index ("15") or a range ("14-12" hyphen / "5:0" colon, per-datasheet). The
+// register width follows the highest bit seen (TMAG5170's reach 15 → 16-bit;
+// TUSS4470's stop at 7 → 8-bit — see widthFor).
 // Returns acronym -> bit fields, which ti-register-map merges into its summary.
 // See wiki: register-width, generic-register-table.
 
@@ -13,8 +15,12 @@ import type { BitField, PageContent } from "./types.js";
 // "Table 7-6. DEVICE_CONFIG Register Field Descriptions" (+ optional "(continued)").
 const TITLE =
   /Table\s+[\d.\-–]+\.\s+([A-Z][A-Z0-9_]+)\s+Register Field Descriptions/;
-// A Bit cell: a single index or an "msb-lsb" span.
-const BIT = /^(\d{1,2})(?:-(\d{1,2}))?$/;
+// A Bit cell: a single index or an "msb-lsb" span. The span separator varies
+// by TI datasheet generation: TMAG5170 prints a hyphen ("14-12"), TUSS4470 a
+// colon ("5:0") — hyphen-only silently dropped every multi-bit TUSS field
+// while keeping the single-bit ones, yielding a misleading partial bit list
+// (STM32 field test, Unit 3).
+const BIT = /^(\d{1,2})(?:[-:](\d{1,2}))?$/;
 // The Bit column sits at the far left (x≈76); enum-continuation rows start at the
 // Description column (x≈308), so this bound rejects them.
 const BIT_X_MAX = 100;

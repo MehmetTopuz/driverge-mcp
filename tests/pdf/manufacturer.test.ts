@@ -99,6 +99,37 @@ describe("detectManufacturer", () => {
       ).toBe("generic");
     });
   });
+
+  // STM32 field test (Unit 3, 2026-07): the FXL6408-D.PDF fixture reports
+  // manufacturer "generic" / confidence 0 today — VENDORS has no onsemi entry
+  // at all (see raw/stm32-test-results/FXL6408-report.md §4). onsemi's own
+  // datasheet boilerplate (footer, page 14 legal block) carries "© Semiconductor
+  // Components Industries, LLC" as the copyright holder (NOT the literal word
+  // "onsemi" in the copyright line itself — "onsemi" appears as a separate
+  // trademark/brand name throughout), "www.onsemi.com" as the domain, and the
+  // vendor's own "<PART>/D" publication-order-number idiom (e.g. "FXL6408/D").
+  describe("onsemi (Unit 3 — FXL6408 field-test gap: no vendor signal at all today)", () => {
+    it("identifies onsemi from copyright + domain", () => {
+      const r = detectManufacturer([
+        page(
+          "© Semiconductor Components Industries, LLC, 2024 www.onsemi.com FXL6408/D Rev. 3 " +
+            "onsemi and other names, marks, and brands are registered trademarks of Semiconductor " +
+            "Components Industries, LLC dba onsemi.",
+        ),
+      ]);
+      expect(r.manufacturer).toBe("onsemi");
+      expect(r.confidence).toBeGreaterThan(0);
+    });
+
+    // Guard pin, mirroring every other vendor's lone-weak-signal case above: a
+    // bare part number with no onsemi branding must NOT be enough on its own.
+    it("falls back to generic on a lone part-prefix (no onsemi signal)", () => {
+      expect(
+        detectManufacturer([page("The FXL6408 is an 8-bit I2C-controlled GPIO expander.")])
+          .manufacturer,
+      ).toBe("generic");
+    });
+  });
 });
 
 const TMAG = fileURLToPath(
@@ -136,5 +167,19 @@ describe.skipIf(!existsSync(MCP))("detectManufacturer (real MCP23017)", () => {
     const analysis = await analyzePdfFile(MCP);
     const r = detectManufacturer(analysis.pages);
     expect(r.manufacturer).toBe("Microchip");
+    expect(r.confidence).toBeGreaterThan(0.5);
+  });
+});
+
+// FXL6408 fixture-gated (Unit 3, real onsemi datasheet) — see
+// raw/stm32-test-results/FXL6408-report.md §4: manufacturer comes back
+// "generic" / confidence 0 today.
+const FXL = fileURLToPath(new URL("../fixtures/fxl6408.pdf", import.meta.url));
+
+describe.skipIf(!existsSync(FXL))("detectManufacturer (real FXL6408)", () => {
+  it("detects onsemi with positive confidence", async () => {
+    const analysis = await analyzePdfFile(FXL);
+    const r = detectManufacturer(analysis.pages);
+    expect(r.manufacturer).toBe("onsemi");
   });
 });

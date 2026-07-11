@@ -77,6 +77,32 @@ function systemConfigPage() {
   };
 }
 
+// TUSS4470 (STM32 field test, Unit 3) writes multi-bit ranges with a COLON
+// ("3:0") where TMAG5170 uses a hyphen ("14-12"); bare single-digit cells are
+// shared by both dialects. Measured x/width from the real fixture's page 26
+// (Table 7-12) — an 8-bit register, so this also pins widthFor staying at 8.
+function vdrvCtrlColonPage() {
+  const items = [
+    t("Table 7-12. VDRV_CTRL Register Field Descriptions", 183, 250, 345),
+    t("Bit", 76, 11, 332), t("Field", 109, 19, 332), t("Type", 208, 18, 332),
+    t("Reset", 258, 22, 332), t("Description", 308, 44, 332),
+    t("7", 79, 4, 318), t("RESERVED", 109, 44, 318), t("R", 208, 6, 318),
+    t("0x0", 258, 12, 318), t("Reserved", 308, 34, 318),
+    t("6", 79, 4, 304), t("DIS_VDRV_REG_LSTN", 109, 85, 304), t("R/W", 208, 16, 304),
+    t("0x0", 258, 12, 304), t("Automatically disable VDRV charging in listen mode", 308, 190, 304),
+    t("5", 79, 4, 290), t("VDRV_HI_Z", 109, 45, 290), t("R/W", 208, 16, 290),
+    t("0x1", 258, 12, 290), t("Turn off current source between VPWR and VDRV", 308, 180, 290),
+    t("3:0", 76, 12, 276), t("VDRV_VOLTAGE_LEVEL", 109, 92, 276), t("R/W", 208, 16, 276),
+    t("0x0", 258, 12, 276), t("Regulated Voltage at VDRV pin", 308, 110, 276),
+  ];
+  return {
+    index: 26,
+    text: "Table 7-12. VDRV_CTRL Register Field Descriptions",
+    items,
+    hasImage: false,
+  };
+}
+
 describe("findTiFieldDescriptions", () => {
   it("extracts named bit fields (width 16), skipping RESERVED and enum-continuation rows", () => {
     const table = findTiFieldDescriptions([deviceConfigPage()]).get("DEVICE_CONFIG");
@@ -110,5 +136,15 @@ describe("findTiFieldDescriptions", () => {
     const map = findTiFieldDescriptions([deviceConfigPage(), systemConfigPage()]);
     expect(map.get("DEVICE_CONFIG")?.bitFields.length).toBe(2);
     expect(map.get("SYSTEM_CONFIG")?.bitFields.length).toBe(1);
+  });
+
+  it("parses the TUSS4470 colon range dialect (3:0) alongside bare single digits, width 8", () => {
+    const table = findTiFieldDescriptions([vdrvCtrlColonPage()]).get("VDRV_CTRL");
+    expect(table?.width).toBe(8);
+    expect(table?.bitFields).toEqual([
+      { name: "DIS_VDRV_REG_LSTN", msb: 6, lsb: 6 },
+      { name: "VDRV_HI_Z", msb: 5, lsb: 5 },
+      { name: "VDRV_VOLTAGE_LEVEL", msb: 3, lsb: 0 },
+    ]);
   });
 });

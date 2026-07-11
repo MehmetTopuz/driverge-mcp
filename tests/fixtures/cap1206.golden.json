@@ -1,0 +1,83 @@
+{
+  "metadata": {
+    "part": "CAP1206",
+    "manufacturer": "Microchip",
+    "manufacturerConfidence": 1,
+    "pdfType": "text_based",
+    "pageCount": 63
+  },
+  "protocol": {
+    "bus": "I2C"
+  },
+  "interface": {
+    "kind": "register_map",
+    "registers": [
+      { "name": "Main Control", "address": "0x00", "reset": "0x00", "bitFields": [] },
+      { "name": "General Status", "address": "0x02", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input Status", "address": "0x03", "reset": "0x00", "bitFields": [] },
+      { "name": "Noise Flag Status", "address": "0x0A", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 1 Delta Count", "address": "0x10", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 2 Delta Count", "address": "0x11", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 3 Delta Count", "address": "0x12", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 4 Delta Count", "address": "0x13", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 5 Delta Count", "address": "0x14", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 6 Delta Count", "address": "0x15", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensitivity Control", "address": "0x1F", "reset": "0x2F", "bitFields": [] },
+      { "name": "Configuration", "address": "0x20", "reset": "0x20", "bitFields": [] },
+      { "name": "Sensor Input Enable", "address": "0x21", "reset": "0x3F", "bitFields": [] },
+      { "name": "Sensor Input Configuration", "address": "0x22", "reset": "0xA4", "bitFields": [] },
+      { "name": "Sensor Input Configuration 2", "address": "0x23", "reset": "0x07", "bitFields": [] },
+      { "name": "Averaging and Sampling Config", "address": "0x24", "reset": "0x39", "bitFields": [] },
+      { "name": "Calibration Activate and Status", "address": "0x26", "reset": "0x00", "bitFields": [] },
+      { "name": "Interrupt Enable", "address": "0x27", "reset": "0x3F", "bitFields": [] },
+      { "name": "Repeat Rate Enable", "address": "0x28", "reset": "0x3F", "bitFields": [] },
+      { "name": "Multiple Touch Configuration", "address": "0x2A", "reset": "0x80", "bitFields": [] },
+      { "name": "Multiple Touch Pattern Configuration", "address": "0x2B", "reset": "0x00", "bitFields": [] },
+      { "name": "Multiple Touch Pattern", "address": "0x2D", "reset": "0x3F", "bitFields": [] },
+      { "name": "Base Count Out of Limit", "address": "0x2E", "reset": "0x00", "bitFields": [] },
+      { "name": "Recalibration Configuration", "address": "0x2F", "reset": "0x8A", "bitFields": [] },
+      { "name": "Sensor Input 1 Threshold", "address": "0x30", "reset": "0x40", "bitFields": [] },
+      { "name": "Sensor Input 2 Threshold", "address": "0x31", "reset": "0x40", "bitFields": [] },
+      { "name": "Sensor Input 3 Threshold", "address": "0x32", "reset": "0x40", "bitFields": [] },
+      { "name": "Sensor Input 4 Threshold", "address": "0x33", "reset": "0x40", "bitFields": [] },
+      { "name": "Sensor Input 5 Threshold", "address": "0x34", "reset": "0x40", "bitFields": [] },
+      { "name": "Sensor Input 6 Threshold", "address": "0x35", "reset": "0x40", "bitFields": [] },
+      { "name": "Sensor Input Noise Threshold", "address": "0x38", "reset": "0x01", "bitFields": [] },
+      { "name": "Standby Channel", "address": "0x40", "reset": "0x00", "bitFields": [] },
+      { "name": "Standby Configuration", "address": "0x41", "reset": "0x39", "bitFields": [] },
+      { "name": "Standby Sensitivity", "address": "0x42", "reset": "0x02", "bitFields": [] },
+      { "name": "Standby Threshold", "address": "0x43", "reset": "0x40", "bitFields": [] },
+      { "name": "Configuration 2", "address": "0x44", "reset": "0x40", "bitFields": [] },
+      { "name": "Sensor Input 1 Base Count", "address": "0x50", "reset": "0xC8", "bitFields": [] },
+      { "name": "Sensor Input 2 Base Count", "address": "0x51", "reset": "0xC8", "bitFields": [] },
+      { "name": "Sensor Input 3 Base Count", "address": "0x52", "reset": "0xC8", "bitFields": [] },
+      { "name": "Sensor Input 4 Base Count", "address": "0x53", "reset": "0xC8", "bitFields": [] },
+      { "name": "Sensor Input 5 Base Count", "address": "0x54", "reset": "0xC8", "bitFields": [] },
+      { "name": "Sensor Input 6 Base Count", "address": "0x55", "reset": "0xC8", "bitFields": [] },
+      { "name": "Power Button", "address": "0x60", "reset": "0x00", "bitFields": [] },
+      { "name": "Power Button Configuration", "address": "0x61", "reset": "0x22", "bitFields": [] },
+      { "name": "Sensor Input 1 Calibration", "address": "0xB1", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 2 Calibration", "address": "0xB2", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 3 Calibration", "address": "0xB3", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 4 Calibration", "address": "0xB4", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 5 Calibration", "address": "0xB5", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input 6 Calibration", "address": "0xB6", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input Calibration LSB 1", "address": "0xB9", "reset": "0x00", "bitFields": [] },
+      { "name": "Sensor Input Calibration LSB 2", "address": "0xBA", "reset": "0x00", "bitFields": [] },
+      { "name": "Product ID", "address": "0xFD", "reset": "0x67", "bitFields": [] },
+      { "name": "Manufacturer ID", "address": "0xFE", "reset": "0x5D", "bitFields": [] },
+      { "name": "Revision", "address": "0xFF", "reset": "0x00", "bitFields": [] }
+    ]
+  },
+  "extraction": {
+    "status": "partial",
+    "detectedPages": [3, 21, 27, 37]
+  },
+  "validation": {
+    "valid": true,
+    "errors": [],
+    "warnings": [
+      "register map is partial — addresses extracted without bit-field detail; the host AI should add bit fields from the datasheet"
+    ]
+  }
+}

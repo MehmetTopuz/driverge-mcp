@@ -26,6 +26,9 @@ const PART_PATTERNS: readonly RegExp[] = [
   /\bMLX\d{5}[A-Z]*\b/gi, // MLX90614
   /\bMPU-?\d{4}\b/gi, // MPU-9250, MPU6050, MPU6500 (InvenSense/TDK)
   /\bICM-?\d{5}\b/gi, // ICM-20948, ICM-42605 (InvenSense/TDK)
+  /\bFXL\d{4}[A-Z]?\b/gi, // FXL6408 (onsemi GPIO expanders) — STM32 field test
+  /\bCAP1\d{3}\b/gi, // CAP1206, CAP1188 (Microchip touch) — STM32 field test
+  /\bTUSS\d{4}\b/gi, // TUSS4470, TUSS4440 (TI ultrasonic) — STM32 field test
 ];
 
 /** The most frequently occurring vendor part token, uppercased; "" if none. */

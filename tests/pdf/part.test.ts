@@ -107,6 +107,43 @@ describe("detectPart", () => {
       ]),
     ).toBe("ICM-20948");
   });
+
+  // STM32 field tests (raw/stm32-test-results/, Session E): all three sessions
+  // reported metadata.part "" because PART_PATTERNS had no onsemi FXL,
+  // Microchip CAP12xx, or TI TUSS entry — the host AI had to fill the part in
+  // by hand during the deferred loop.
+  it("detects onsemi's FXL family (FXL6408)", () => {
+    expect(
+      detectPart([
+        page(
+          "The FXL6408 is a fully configurable 8-bit I2C-controlled GPIO expander. " +
+            "FXL6408 offers 400 kHz Fast-mode operation. FXL6408 register map follows.",
+        ),
+      ]),
+    ).toBe("FXL6408");
+  });
+
+  it("detects Microchip's CAP12xx touch family (CAP1206)", () => {
+    expect(
+      detectPart([
+        page(
+          "CAP1206 6-channel capacitive touch sensor. The CAP1206 contains six " +
+            "capacitive touch sensor inputs. CAP1206 SMBus/I2C interface.",
+        ),
+      ]),
+    ).toBe("CAP1206");
+  });
+
+  it("detects TI's TUSS ultrasonic family (TUSS4470)", () => {
+    expect(
+      detectPart([
+        page(
+          "TUSS4470 direct-drive ultrasonic sensor IC. The TUSS4470 integrates a " +
+            "burst generator. TUSS4470 SPI register map follows.",
+        ),
+      ]),
+    ).toBe("TUSS4470");
+  });
 });
 
 const TMAG = fileURLToPath(new URL("../fixtures/tmag5170-q1.pdf", import.meta.url));
@@ -114,5 +151,28 @@ const TMAG = fileURLToPath(new URL("../fixtures/tmag5170-q1.pdf", import.meta.ur
 describe.skipIf(!existsSync(TMAG))("detectPart (real TMAG5170)", () => {
   it("extracts TMAG5170 from the datasheet", async () => {
     expect(detectPart((await analyzePdfFile(TMAG)).pages)).toBe("TMAG5170");
+  });
+});
+
+// Session E field-test fixtures — same skipIf convention as TMAG above.
+const FXL = fileURLToPath(new URL("../fixtures/fxl6408.pdf", import.meta.url));
+const CAP = fileURLToPath(new URL("../fixtures/cap1206.pdf", import.meta.url));
+const TUSS = fileURLToPath(new URL("../fixtures/tuss4470.pdf", import.meta.url));
+
+describe.skipIf(!existsSync(FXL))("detectPart (real FXL6408)", () => {
+  it("extracts FXL6408 from the datasheet", async () => {
+    expect(detectPart((await analyzePdfFile(FXL)).pages)).toBe("FXL6408");
+  });
+});
+
+describe.skipIf(!existsSync(CAP))("detectPart (real CAP1206)", () => {
+  it("extracts CAP1206 from the datasheet", async () => {
+    expect(detectPart((await analyzePdfFile(CAP)).pages)).toBe("CAP1206");
+  });
+});
+
+describe.skipIf(!existsSync(TUSS))("detectPart (real TUSS4470)", () => {
+  it("extracts TUSS4470 from the datasheet", async () => {
+    expect(detectPart((await analyzePdfFile(TUSS)).pages)).toBe("TUSS4470");
   });
 });

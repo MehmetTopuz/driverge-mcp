@@ -9,6 +9,8 @@ import { findGenericRegisterTable } from "../pdf/generic-register-table.js";
 import { detectInterfaceKind, detectSections } from "../pdf/interface-kind.js";
 import { detectManufacturer } from "../pdf/manufacturer.js";
 import { findMaximRegisterMap } from "../pdf/maxim-register-map.js";
+import { findMicrochipSummaryTable } from "../pdf/microchip-summary-table.js";
+import { findOnsemiRegisterTable } from "../pdf/onsemi-register-table.js";
 import { detectPart } from "../pdf/part.js";
 import { extractProseCommands } from "../pdf/prose-commands.js";
 import { findRegisterTable } from "../pdf/register-table.js";
@@ -45,6 +47,19 @@ function buildInterface(pages: PageContent[], kind: string): DeviceInterface {
   // slot pattern as every prior specialized adapter in this chain.
   if (registers.length === 0) {
     registers = findMaximRegisterMap(pages)?.registers ?? [];
+  }
+  // onsemi's per-bit-plus-Type-column shape (see onsemi-register-table): tried
+  // after every other specialized adapter and before the role-based generic
+  // fallback, same slot pattern as every prior specialized adapter above.
+  if (registers.length === 0) {
+    registers = findOnsemiRegisterTable(pages)?.registers ?? [];
+  }
+  // Microchip's OTHER table shape (see microchip-summary-table): a six-column,
+  // no-bit-columns summary (CAP1206's Table 5-1) that the generic role-based
+  // fallback below WOULD otherwise partially match (page-local, 4/55) — tried
+  // here, before generic, so the full cross-page accumulation wins instead.
+  if (registers.length === 0) {
+    registers = findMicrochipSummaryTable(pages)?.registers ?? [];
   }
   if (registers.length === 0) {
     registers = findGenericRegisterTable(pages)?.registers ?? [];

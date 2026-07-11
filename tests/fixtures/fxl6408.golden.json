@@ -1,0 +1,176 @@
+{
+  "metadata": {
+    "part": "FXL6408",
+    "manufacturer": "onsemi",
+    "manufacturerConfidence": 1,
+    "pdfType": "text_based",
+    "pageCount": 14
+  },
+  "protocol": {
+    "bus": "I2C"
+  },
+  "interface": {
+    "kind": "register_map",
+    "registers": [
+      {
+        "name": "Device ID & Ctrl",
+        "address": "0x01",
+        "reset": "0xA2",
+        "bitFields": [
+          { "name": "MF3", "msb": 7, "lsb": 7 },
+          { "name": "MF2", "msb": 6, "lsb": 6 },
+          { "name": "MF1", "msb": 5, "lsb": 5 },
+          { "name": "FW_rev3", "msb": 4, "lsb": 4 },
+          { "name": "FW_rev2", "msb": 3, "lsb": 3 },
+          { "name": "FW_rev1", "msb": 2, "lsb": 2 },
+          { "name": "RST_INT", "msb": 1, "lsb": 1 },
+          { "name": "SW_RST", "msb": 0, "lsb": 0 }
+        ]
+      },
+      {
+        "name": "IO Direction",
+        "address": "0x03",
+        "reset": "0x00",
+        "bitFields": [
+          { "name": "GPIO7", "msb": 7, "lsb": 7 },
+          { "name": "GPIO6", "msb": 6, "lsb": 6 },
+          { "name": "GPIO5", "msb": 5, "lsb": 5 },
+          { "name": "GPIO4", "msb": 4, "lsb": 4 },
+          { "name": "GPIO3", "msb": 3, "lsb": 3 },
+          { "name": "GPIO2", "msb": 2, "lsb": 2 },
+          { "name": "GPIO1", "msb": 1, "lsb": 1 },
+          { "name": "GPIO0", "msb": 0, "lsb": 0 }
+        ]
+      },
+      {
+        "name": "Output State",
+        "address": "0x05",
+        "reset": "0x00",
+        "bitFields": [
+          { "name": "Out 7", "msb": 7, "lsb": 7 },
+          { "name": "Out 6", "msb": 6, "lsb": 6 },
+          { "name": "Out 5", "msb": 5, "lsb": 5 },
+          { "name": "Out 4", "msb": 4, "lsb": 4 },
+          { "name": "Out 3", "msb": 3, "lsb": 3 },
+          { "name": "Out 2", "msb": 2, "lsb": 2 },
+          { "name": "Out 1", "msb": 1, "lsb": 1 },
+          { "name": "Out 0", "msb": 0, "lsb": 0 }
+        ]
+      },
+      {
+        "name": "Output High−Z",
+        "address": "0x07",
+        "reset": "0xFF",
+        "bitFields": [
+          { "name": "Out 7", "msb": 7, "lsb": 7 },
+          { "name": "Out 6", "msb": 6, "lsb": 6 },
+          { "name": "Out 5", "msb": 5, "lsb": 5 },
+          { "name": "Out 4", "msb": 4, "lsb": 4 },
+          { "name": "Out 3", "msb": 3, "lsb": 3 },
+          { "name": "Out 2", "msb": 2, "lsb": 2 },
+          { "name": "Out 1", "msb": 1, "lsb": 1 },
+          { "name": "Out 0", "msb": 0, "lsb": 0 }
+        ]
+      },
+      {
+        "name": "Input Default State",
+        "address": "0x09",
+        "reset": "0x00",
+        "bitFields": [
+          { "name": "In 7", "msb": 7, "lsb": 7 },
+          { "name": "In 6", "msb": 6, "lsb": 6 },
+          { "name": "In 5", "msb": 5, "lsb": 5 },
+          { "name": "In 4", "msb": 4, "lsb": 4 },
+          { "name": "In 3", "msb": 3, "lsb": 3 },
+          { "name": "In 2", "msb": 2, "lsb": 2 },
+          { "name": "In 1", "msb": 1, "lsb": 1 },
+          { "name": "In 0", "msb": 0, "lsb": 0 }
+        ]
+      },
+      {
+        "name": "Pull Enable",
+        "address": "0x0B",
+        "reset": "0xFF",
+        "bitFields": [
+          { "name": "In 7", "msb": 7, "lsb": 7 },
+          { "name": "In 6", "msb": 6, "lsb": 6 },
+          { "name": "In 5", "msb": 5, "lsb": 5 },
+          { "name": "In 4", "msb": 4, "lsb": 4 },
+          { "name": "In 3", "msb": 3, "lsb": 3 },
+          { "name": "In 2", "msb": 2, "lsb": 2 },
+          { "name": "In 1", "msb": 1, "lsb": 1 },
+          { "name": "In 0", "msb": 0, "lsb": 0 }
+        ]
+      },
+      {
+        "name": "Pull−Down/ Pull−Up",
+        "address": "0x0D",
+        "reset": "0x00",
+        "bitFields": [
+          { "name": "In 7", "msb": 7, "lsb": 7 },
+          { "name": "In 6", "msb": 6, "lsb": 6 },
+          { "name": "In 5", "msb": 5, "lsb": 5 },
+          { "name": "In 4", "msb": 4, "lsb": 4 },
+          { "name": "In 3", "msb": 3, "lsb": 3 },
+          { "name": "In 2", "msb": 2, "lsb": 2 },
+          { "name": "In 1", "msb": 1, "lsb": 1 },
+          { "name": "In 0", "msb": 0, "lsb": 0 }
+        ]
+      },
+      {
+        "name": "Input Status",
+        "address": "0x0F",
+        "reset": "XXXXXXXX",
+        "bitFields": [
+          { "name": "In 7", "msb": 7, "lsb": 7 },
+          { "name": "In 6", "msb": 6, "lsb": 6 },
+          { "name": "In 5", "msb": 5, "lsb": 5 },
+          { "name": "In 4", "msb": 4, "lsb": 4 },
+          { "name": "In 3", "msb": 3, "lsb": 3 },
+          { "name": "In 2", "msb": 2, "lsb": 2 },
+          { "name": "In 1", "msb": 1, "lsb": 1 },
+          { "name": "In 0", "msb": 0, "lsb": 0 }
+        ]
+      },
+      {
+        "name": "Interrupt Mask",
+        "address": "0x11",
+        "reset": "0x00",
+        "bitFields": [
+          { "name": "In 7", "msb": 7, "lsb": 7 },
+          { "name": "In 6", "msb": 6, "lsb": 6 },
+          { "name": "In 5", "msb": 5, "lsb": 5 },
+          { "name": "In 4", "msb": 4, "lsb": 4 },
+          { "name": "In 3", "msb": 3, "lsb": 3 },
+          { "name": "In 2", "msb": 2, "lsb": 2 },
+          { "name": "In 1", "msb": 1, "lsb": 1 },
+          { "name": "In 0", "msb": 0, "lsb": 0 }
+        ]
+      },
+      {
+        "name": "Interrupt Status",
+        "address": "0x13",
+        "reset": "XXXXXXXX",
+        "bitFields": [
+          { "name": "In 7", "msb": 7, "lsb": 7 },
+          { "name": "In 6", "msb": 6, "lsb": 6 },
+          { "name": "In 5", "msb": 5, "lsb": 5 },
+          { "name": "In 4", "msb": 4, "lsb": 4 },
+          { "name": "In 3", "msb": 3, "lsb": 3 },
+          { "name": "In 2", "msb": 2, "lsb": 2 },
+          { "name": "In 1", "msb": 1, "lsb": 1 },
+          { "name": "In 0", "msb": 0, "lsb": 0 }
+        ]
+      }
+    ]
+  },
+  "extraction": {
+    "status": "complete",
+    "detectedPages": [7, 9]
+  },
+  "validation": {
+    "valid": true,
+    "errors": [],
+    "warnings": []
+  }
+}

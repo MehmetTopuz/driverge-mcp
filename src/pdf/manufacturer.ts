@@ -94,6 +94,18 @@ const VENDORS: readonly VendorRule[] = [
     domain: /melexis\.com/i,
     partPrefix: /\bMLX\d/i,
   },
+  // onsemi (STM32 field test, Unit 3): the copyright line names the legal
+  // entity, not the "onsemi" brand itself ("© Semiconductor Components
+  // Industries, LLC" — "onsemi" appears separately as a trademark/dba
+  // notice), so the copyright signal matches the entity name rather than
+  // "onsemi" directly. Paired with the onsemi.com domain for the same
+  // strong copyright+url shape every other vendor rule uses.
+  {
+    name: "onsemi",
+    copyright: /Semiconductor\s+Components\s+Industries/i,
+    domain: /onsemi\.com/i,
+    partPrefix: /\bFXL\d/i,
+  },
 ];
 
 const STRONG = 3;
