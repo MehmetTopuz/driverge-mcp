@@ -137,15 +137,18 @@ describe("generateDriver(json, 'portable', {language:'cpp'}) — register_map I2
     expect(hpp).toContain(shiftLine);
   });
 
-  it('wraps the seam declarations in extern "C" { ... }, same decl strings as the C header', () => {
+  it('wraps the PREFIXED seam declarations in extern "C" { ... }, same decl strings as the C header', () => {
     requireGenerated();
-    const writeLine = lineWith(cHeader, "int hal_i2c_write(");
-    const readLine = lineWith(cHeader, "int hal_i2c_read (");
-    const delayLine = lineWith(cHeader, "void hal_delay_ms (");
+    const writeLine = lineWith(cHeader, "int bme280_hal_i2c_write(");
+    const readLine = lineWith(cHeader, "int bme280_hal_i2c_read (");
+    const delayLine = lineWith(cHeader, "void bme280_hal_delay_ms (");
     const block = externCBlock(hpp);
     expect(block).toContain(writeLine);
     expect(block).toContain(readLine);
     expect(block).toContain(delayLine);
+    expect(block).not.toMatch(/[^_a-zA-Z0-9]hal_i2c_write\(/);
+    expect(block).not.toMatch(/[^_a-zA-Z0-9]hal_i2c_read\s*\(/);
+    expect(block).not.toMatch(/[^_a-zA-Z0-9]hal_delay_ms\s*\(/);
   });
 
   it('declares the class AFTER the extern "C" block, never inside it', () => {
@@ -180,14 +183,16 @@ describe("generateDriver(json, 'portable', {language:'cpp'}) — register_map I2
     expect(cpp).not.toMatch(/\bbme280_t\b/);
   });
 
-  it("the .cpp defines Bme280:: methods, keeps the TODO(driverge) marker, and calls the I2C seam", () => {
+  it("the .cpp defines Bme280:: methods, keeps the TODO(driverge) marker, and calls the PREFIXED I2C seam", () => {
     requireGenerated();
     expect(cpp).toMatch(/int\s+Bme280::init\(\)/);
     expect(cpp).toMatch(/Bme280::readRegister/);
     expect(cpp).toMatch(/Bme280::writeRegister/);
     expect(cpp).toContain("TODO(driverge)");
-    expect(cpp).toMatch(/hal_i2c_read\(/);
-    expect(cpp).toMatch(/hal_i2c_write\(/);
+    expect(cpp).toMatch(/bme280_hal_i2c_read\(/);
+    expect(cpp).toMatch(/bme280_hal_i2c_write\(/);
+    expect(cpp).not.toMatch(/[^_a-zA-Z0-9]hal_i2c_read\(/);
+    expect(cpp).not.toMatch(/[^_a-zA-Z0-9]hal_i2c_write\(/);
   });
 
   it("fill_in_brief has the same keys as the C artifact for the same datasheet", () => {
@@ -241,11 +246,13 @@ describe("generateDriver(json, 'portable', {language:'cpp'}) — SPI register_ma
     expect(hpp).toContain("class Tmag5170 {");
   });
 
-  it('wraps the combined hal_spi_transfer seam in extern "C", same decl string as the C header', () => {
+  it('wraps the PREFIXED, full-duplex tmag5170_hal_spi_transfer seam in extern "C", same decl string as the C header', () => {
     requireGenerated();
-    const transferLine = lineWith(cHeader, "int hal_spi_transfer(");
+    const transferLine = lineWith(cHeader, "int tmag5170_hal_spi_transfer(");
     const block = externCBlock(hpp);
     expect(block).toContain(transferLine);
+    expect(block).not.toMatch(/[^_a-zA-Z0-9]hal_spi_transfer\(/);
+    expect(block).not.toMatch(/tx_len|rx_len/);
   });
 
   it("carries the same register #define as the C header", () => {
@@ -254,9 +261,11 @@ describe("generateDriver(json, 'portable', {language:'cpp'}) — SPI register_ma
     expect(hpp).toContain(regLine);
   });
 
-  it("routes readRegister/writeRegister through hal_spi_transfer in the .cpp", () => {
+  it("routes readRegister/writeRegister through the full-duplex, PREFIXED tmag5170_hal_spi_transfer(tx, rx, 2) in the .cpp", () => {
     requireGenerated();
-    expect(cpp).toMatch(/hal_spi_transfer\(/);
+    expect(cpp).toMatch(/tmag5170_hal_spi_transfer\(\s*\w+\s*,\s*\w+\s*,\s*2\s*\)/);
+    expect(cpp).not.toMatch(/[^_a-zA-Z0-9]hal_spi_transfer\(/);
+    expect(cpp).not.toMatch(/tx_len|rx_len/);
   });
 
   it("never emits a typedef struct handle (tmag5170_t)", () => {
@@ -335,12 +344,13 @@ describe("generateDriver(json, 'portable', {language:'cpp'}) — command_set (SH
     expect(hpp).not.toMatch(/\bsht3x_read_data\b/);
   });
 
-  it("the .cpp defines Sht3x:: methods and keeps the CRC TODO(driverge) marker", () => {
+  it("the .cpp defines Sht3x:: methods, keeps the CRC TODO(driverge) marker, and calls the PREFIXED I2C seam", () => {
     requireGenerated();
     expect(cpp).toMatch(/Sht3x::sendCommand/);
     expect(cpp).toMatch(/Sht3x::crc8/);
     expect(cpp).toContain("TODO(driverge)");
-    expect(cpp).toMatch(/hal_i2c_write\(/);
+    expect(cpp).toMatch(/sht3x_hal_i2c_write\(/);
+    expect(cpp).not.toMatch(/[^_a-zA-Z0-9]hal_i2c_write\(/);
   });
 
   it("fill_in_brief keeps the crc_todo key, same structure as the C artifact", () => {
@@ -375,17 +385,17 @@ describe("generateDriver(json, 'portable', {language:'cpp'}) — UART framing ga
     if (thrown) throw thrown;
   }
 
-  it("carries a framing_todo naming both UART seam functions", () => {
+  it("carries a framing_todo naming both PREFIXED UART seam functions", () => {
     requireGenerated();
     expect(art.fill_in_brief.framing_todo).toBeDefined();
-    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_write");
-    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_read");
+    expect(art.fill_in_brief.framing_todo).toContain("mhz19_hal_uart_write");
+    expect(art.fill_in_brief.framing_todo).toContain("mhz19_hal_uart_read");
   });
 
-  it("the .cpp body names the seam function(s) in the framing TODO, same rule as C", () => {
+  it("the .cpp body names the PREFIXED seam function(s) in the framing TODO, same rule as C", () => {
     requireGenerated();
     expect(cpp).toContain("TODO(driverge)");
-    expect(cpp).toMatch(/hal_uart_write|hal_uart_read/);
+    expect(cpp).toMatch(/mhz19_hal_uart_write|mhz19_hal_uart_read/);
   });
 });
 

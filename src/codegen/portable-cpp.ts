@@ -5,11 +5,14 @@
 // class (<slug>.hpp/.cpp) instead of a struct + free functions (<slug>.h/.c).
 //
 // Deliberately reuses portable.ts's pure #define/TODO/seam-declaration builders
-// (registerConstants, bitFieldMacros, registerMapTodo, commandSetTodo, BUS_SEAM
-// decl, uartFramingBody/canFramingBody, registerBrief/commandBrief) instead of
-// re-deriving them, so the two language flavors can never drift on the
-// macro/seam contract that validate_driver and the native _hal_<target>.c seam
-// files depend on — see wiki: thin-hal-non-negotiable, json-schema-as-contract.
+// (registerConstants, bitFieldMacros, registerMapTodo, commandSetTodo,
+// busSeam(name).decl, uartFramingBody/canFramingBody,
+// registerBrief/commandBrief) instead of re-deriving them, so the two language
+// flavors can never drift on the macro/seam contract that validate_driver and
+// the native _hal_<target>.c seam files depend on — see wiki:
+// thin-hal-non-negotiable, json-schema-as-contract. Every seam symbol is
+// per-driver prefixed (`<slug>_hal_*`) exactly like the C flavor, since both
+// flavors pull the SAME busSeam(name) table.
 //
 // What genuinely differs (and is NOT shared) is the struct-vs-class /
 // free-function-vs-method shape: the driver handle's address state becomes a
@@ -22,10 +25,10 @@ import type { Command, DatasheetJson } from "../schema/types.js";
 import { commentSafe, hexOrUndefined, macro, pascalCase, slug } from "./ident.js";
 import {
   AUTOGEN,
-  BUS_SEAM,
   COMMAND_INIT_TODO,
   I2C_COMMAND_FRAME_NOTE,
   bitFieldMacros,
+  busSeam,
   canFramingBody,
   commandBrief,
   commandReadDataTodo,
@@ -56,12 +59,14 @@ const EXTERN_C_NOTE: readonly string[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Per-bus C++ method bodies + private member(s). Mirrors BUS_SEAM's role for
-// the C struct/free-function shape, but a class stores its address state as a
-// member (`i2c_addr_`) instead of a handle-struct field, and reference params
-// (`uint8_t &value`) need no null check the way a C pointer does — so the
-// bodies, not just the syntax, differ enough from BUS_SEAM's readBody/writeBody
-// to warrant their own small table rather than reusing those strings as-is.
+// Per-bus C++ method bodies + private member(s). Mirrors busSeam(name)'s role
+// for the C struct/free-function shape, but a class stores its address state
+// as a member (`i2c_addr_`) instead of a handle-struct field, and reference
+// params (`uint8_t &value`) need no null check the way a C pointer does — so
+// the bodies, not just the syntax, differ enough from busSeam's
+// readBody/writeBody to warrant their own small table rather than reusing
+// those strings as-is. `name` is the seam slug (see the module header
+// comment) — every generated call embeds it, exactly like busSeam(name).
 // ---------------------------------------------------------------------------
 
 interface CppBusSeam {
@@ -75,25 +80,34 @@ interface CppBusSeam {
   writeBody: string[];
 }
 
-function cppBusSeam(busKind: RegisterMapBus, prefix: string): CppBusSeam {
+function cppBusSeam(busKind: RegisterMapBus, name: string, prefix: string): CppBusSeam {
   if (busKind === "I2C") {
     return {
       member: ["    uint8_t i2c_addr_;"],
       initMember: [`    i2c_addr_ = ${prefix}_I2C_ADDR;`],
-      readBody: ["    return hal_i2c_read(i2c_addr_, reg, &value, 1);"],
-      writeBody: ["    return hal_i2c_write(i2c_addr_, reg, &value, 1);"],
+      readBody: [`    return ${name}_hal_i2c_read(i2c_addr_, reg, &value, 1);`],
+      writeBody: [`    return ${name}_hal_i2c_write(i2c_addr_, reg, &value, 1);`],
     };
   }
   if (busKind === "SPI") {
     return {
       member: [],
       initMember: [],
-      readBody: ["    return hal_spi_transfer(&reg, 1, &value, 1);"],
+      readBody: [
+        "    uint8_t tx[2];",
+        "    uint8_t rx[2];",
+        "    int status;",
+        "    tx[0] = reg;",
+        "    tx[1] = 0x00;",
+        `    status = ${name}_hal_spi_transfer(tx, rx, 2);`,
+        "    value = rx[1];",
+        "    return status;",
+      ],
       writeBody: [
-        "    uint8_t frame[2];",
-        "    frame[0] = reg;",
-        "    frame[1] = value;",
-        "    return hal_spi_transfer(frame, 2, nullptr, 0);",
+        "    uint8_t tx[2];",
+        "    tx[0] = reg;",
+        "    tx[1] = value;",
+        `    return ${name}_hal_spi_transfer(tx, nullptr, 2);`,
       ],
     };
   }
@@ -101,15 +115,15 @@ function cppBusSeam(busKind: RegisterMapBus, prefix: string): CppBusSeam {
     return {
       member: [],
       initMember: [],
-      readBody: uartFramingBody(["reg", "value"]),
-      writeBody: uartFramingBody(["reg", "value"]),
+      readBody: uartFramingBody(name, ["reg", "value"]),
+      writeBody: uartFramingBody(name, ["reg", "value"]),
     };
   }
   return {
     member: [],
     initMember: [],
-    readBody: canFramingBody(["reg", "value"]),
-    writeBody: canFramingBody(["reg", "value"]),
+    readBody: canFramingBody(name, ["reg", "value"]),
+    writeBody: canFramingBody(name, ["reg", "value"]),
   };
 }
 
@@ -127,14 +141,15 @@ function registerDriverCpp(
   const spi = busKind === "SPI";
   const uart = busKind === "UART";
   const can = busKind === "CAN";
-  const seam = BUS_SEAM[busKind];
-  const cppSeam = cppBusSeam(busKind, prefix);
+  const seam = busSeam(name)[busKind];
+  const cppSeam = cppBusSeam(busKind, name, prefix);
   const addr = hexOrUndefined(json.protocol.addresses?.[0]);
   const guard = `${prefix}_HPP`;
   const className = pascalCase(name);
 
   const hpp: string[] = [
     AUTOGEN(
+      name,
       json.metadata.part || name,
       json.metadata.manufacturer,
       spi
@@ -187,7 +202,7 @@ function registerDriverCpp(
     ...EXTERN_C_NOTE,
     'extern "C" {',
     ...seam.decl,
-    "void hal_delay_ms (uint32_t ms);",
+    `void ${name}_hal_delay_ms (uint32_t ms);`,
     "}",
     "",
     `class ${className} {`,
@@ -206,7 +221,7 @@ function registerDriverCpp(
     "",
     `int ${className}::init() {`,
     ...cppSeam.initMember,
-    ...registerInitTodo(uart, can, "writeRegister()"),
+    ...registerInitTodo(name, uart, can, "writeRegister"),
     "    return 0;",
     "}",
     "",
@@ -249,9 +264,11 @@ function commandDriverCpp(
   const crc = commands.find((c) => c.crc)?.crc;
   const guard = `${prefix}_HPP`;
   const className = pascalCase(name);
+  const seamTable = busSeam(name);
 
   const hpp: string[] = [
     AUTOGEN(
+      name,
       json.metadata.part || name,
       json.metadata.manufacturer,
       uart
@@ -312,16 +329,8 @@ function commandDriverCpp(
     "",
     ...EXTERN_C_NOTE,
     'extern "C" {',
-    ...(uart
-      ? BUS_SEAM.UART.decl
-      : can
-        ? BUS_SEAM.CAN.decl
-        : [
-            "/* Return 0 on success, non-zero on a bus error (e.g. NACK). */",
-            "int hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
-            "int hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
-          ]),
-    "void hal_delay_ms (uint32_t ms);",
+    ...(uart ? seamTable.UART.decl : can ? seamTable.CAN.decl : seamTable.I2C.decl),
+    `void ${name}_hal_delay_ms (uint32_t ms);`,
     "}",
     "",
     `class ${className} {`,
@@ -347,24 +356,24 @@ function commandDriverCpp(
     "",
     `int ${className}::sendCommand(uint16_t command) {`,
     ...(uart
-      ? uartFramingBody(["command"])
+      ? uartFramingBody(name, ["command"])
       : can
-        ? canFramingBody(["command"])
+        ? canFramingBody(name, ["command"])
         : [
             "    uint8_t msb;",
             "    uint8_t lsb;",
             "    msb = (uint8_t)(command >> 8);",
             "    lsb = (uint8_t)(command & 0xFF);",
             ...I2C_COMMAND_FRAME_NOTE,
-            "    return hal_i2c_write(i2c_addr_, msb, &lsb, 1);",
+            `    return ${name}_hal_i2c_write(i2c_addr_, msb, &lsb, 1);`,
           ]),
     "}",
     "",
     `int ${className}::readData(uint8_t *buffer, uint16_t len) {`,
     ...(uart
-      ? uartFramingBody(["buffer", "len"])
+      ? uartFramingBody(name, ["buffer", "len"])
       : can
-        ? canFramingBody(["buffer", "len"])
+        ? canFramingBody(name, ["buffer", "len"])
         : [
             "    if (buffer == nullptr) {",
             "        return -1;",

@@ -37,11 +37,54 @@ const wide16Datasheet = (): DatasheetJson =>
     validation: { valid: true, errors: [], warnings: [] },
   }) as unknown as DatasheetJson;
 
-// Session A: SPI seam redesign. One hal_spi_transfer() call == one CS-framed
-// transaction, replacing the old hal_spi_write/hal_spi_read pair (see decisions:
-// thin-hal-non-negotiable). ADXL345-shaped: a real SPI part whose register-read
-// convention sets the address MSB (0x80 | reg) — exactly the quirk the
-// quirks_todo must flag for the host AI to verify.
+// Session E: seam prefixing + SPI full-duplex (2026-07-11 STM32 field-test
+// findings, see raw/stm32-test-results/*.md + the approved plan). Every
+// thin-HAL seam symbol becomes `<slug>_hal_*` (slug of json.metadata.part) —
+// generic `hal_i2c_write`/`hal_delay_ms`/`hal_spi_transfer` collided at link
+// in 2 of 3 field sessions (CAP1206+FXL6408, TUSS4470+FXL6408, both sharing
+// `hal_delay_ms`). SPI additionally moves from a two-phase (tx_len, rx_len)
+// half-duplex call to ONE full-duplex hal_spi_transfer(tx, rx, len) — the
+// TUSS4470 report's real fix (`HAL_SPI_TransmitReceive`, single CS window).
+//
+// The read/write-body helpers below pin the SHAPE (one full-duplex transfer
+// call, tx byte 0 = reg, tx byte 1 = 0x00 padding for reads, *value taken from
+// rx[1], the seam's status propagated) without hard-coding variable names —
+// the plan explicitly leaves naming to the implementer.
+
+function assertFullDuplexRead(fnBody: string, seamName: string): void {
+  const call = new RegExp(
+    `(\\w+)\\s*=\\s*${seamName}\\(\\s*(\\w+)\\s*,\\s*(\\w+)\\s*,\\s*2\\s*\\)`,
+  ).exec(fnBody);
+  expect(
+    call,
+    `no "<status> = ${seamName}(<tx>, <rx>, 2)" call found in:\n${fnBody}`,
+  ).toBeTruthy();
+  const [, statusVar, txVar, rxVar] = call!;
+  expect(fnBody).toMatch(new RegExp(`${txVar}\\[0\\]\\s*=\\s*reg`));
+  expect(fnBody).toMatch(new RegExp(`${txVar}\\[1\\]\\s*=\\s*0x00`));
+  expect(fnBody).toMatch(new RegExp(`\\*value\\s*=\\s*${rxVar}\\[1\\]`));
+  expect(fnBody).toMatch(new RegExp(`return\\s+${statusVar}\\s*;`));
+}
+
+function assertFullDuplexWrite(fnBody: string, seamName: string): void {
+  const direct = new RegExp(
+    `return\\s+${seamName}\\(\\s*(\\w+)\\s*,\\s*(?:NULL|nullptr)\\s*,\\s*2\\s*\\)\\s*;`,
+  ).exec(fnBody);
+  const viaVar = new RegExp(
+    `(\\w+)\\s*=\\s*${seamName}\\(\\s*(\\w+)\\s*,\\s*(?:NULL|nullptr)\\s*,\\s*2\\s*\\)[\\s\\S]*?return\\s+\\1\\s*;`,
+  ).exec(fnBody);
+  const match = direct ?? viaVar;
+  expect(
+    match,
+    `no "${seamName}(<tx>, NULL, 2)" call with a propagated status found in:\n${fnBody}`,
+  ).toBeTruthy();
+  const txVar = direct ? direct[1] : viaVar![2];
+  expect(fnBody).toMatch(new RegExp(`${txVar}\\[0\\]\\s*=\\s*reg`));
+  expect(fnBody).toMatch(new RegExp(`${txVar}\\[1\\]\\s*=\\s*value`));
+}
+
+// ADXL345-shaped: a real SPI part whose register-read convention sets the
+// address MSB (0x80 | reg) — exactly the quirk the quirks_todo must flag.
 const spiDatasheet = (): DatasheetJson =>
   ({
     metadata: {
@@ -68,58 +111,83 @@ const spiDatasheet = (): DatasheetJson =>
     validation: { valid: true, errors: [], warnings: [] },
   }) as unknown as DatasheetJson;
 
-describe("generatePortableDriver — SPI combined-transfer seam (ADXL345-shaped)", () => {
+describe("generatePortableDriver — SPI full-duplex prefixed seam (ADXL345-shaped)", () => {
   const art = generatePortableDriver(spiDatasheet());
   const header = art.files.find((f) => f.path === "adxl345.h")!.content;
   const source = art.files.find((f) => f.path === "adxl345.c")!.content;
 
-  it("declares a single combined hal_spi_transfer seam function plus hal_delay_ms", () => {
+  it("declares a single prefixed full-duplex adxl345_hal_spi_transfer seam plus adxl345_hal_delay_ms", () => {
     expect(header).toContain(
-      "int hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
+      "int adxl345_hal_spi_transfer(const uint8_t *tx, uint8_t *rx, uint16_t len);",
     );
-    expect(header).toContain("void hal_delay_ms (uint32_t ms);");
+    expect(header).toContain("void adxl345_hal_delay_ms (uint32_t ms);");
   });
 
-  it("never emits the retired two-function hal_spi_write/hal_spi_read seam", () => {
+  it("documents the full-duplex contract: CS-framed, len bytes, rx may be NULL, and the half-duplex write-then-read idiom via tx padding", () => {
+    const seamBlock = /\/\* Thin-HAL seam[\s\S]*?\/\* Driver handle/.exec(header)?.[0] ?? "";
+    expect(seamBlock).toMatch(/full.duplex/i);
+    expect(seamBlock).toMatch(/CS.framed/i);
+    expect(seamBlock).toMatch(/len bytes/i);
+    expect(seamBlock).toMatch(/rx.*NULL/);
+    expect(seamBlock).toMatch(/write.only/i);
+    expect(seamBlock).toMatch(/dummy/i);
+    expect(seamBlock).toMatch(/0x00/);
+    expect(seamBlock).toMatch(/rx\[0\]/);
+    expect(seamBlock).toMatch(/garbage/i);
+  });
+
+  it("never emits the retired two-function hal_spi_write/hal_spi_read seam, nor the old (tx_len, rx_len) half-duplex signature", () => {
     expect(header).not.toMatch(/hal_spi_write|hal_spi_read/);
     expect(source).not.toMatch(/hal_spi_write|hal_spi_read/);
+    expect(header).not.toMatch(/tx_len|rx_len/);
   });
 
-  it("reads a register with a single hal_spi_transfer call (reg out, value in)", () => {
-    expect(source).toContain("hal_spi_transfer(&reg, 1, value, 1);");
+  it("never emits an unprefixed (bare) hal_spi_transfer or hal_delay_ms call", () => {
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_spi_transfer\(/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_delay_ms\s*\(/);
+    expect(source).not.toMatch(/[^_a-zA-Z0-9]hal_spi_transfer\(/);
   });
 
-  it("writes a register by building a 2-byte frame and one hal_spi_transfer call (no rx)", () => {
-    expect(source).toContain("frame[0] = reg;");
-    expect(source).toContain("frame[1] = value;");
-    expect(source).toContain("hal_spi_transfer(frame, 2, NULL, 0);");
+  it("reads a register via one full-duplex 2-byte adxl345_hal_spi_transfer call: tx={reg,0x00}, *value=rx[1]", () => {
+    const readFn = /adxl345_read_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    assertFullDuplexRead(readFn, "adxl345_hal_spi_transfer");
+  });
+
+  it("writes a register via a 2-byte {reg,value} tx frame and NULL rx through adxl345_hal_spi_transfer", () => {
+    const writeFn = /adxl345_write_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    assertFullDuplexWrite(writeFn, "adxl345_hal_spi_transfer");
   });
 
   it("flags the register-address bit convention as a quirks_todo for the host AI to verify", () => {
-    // Stable contract phrase — the implementer must include this exact substring
-    // (case-insensitive) in fill_in_brief.quirks_todo for SPI parts, e.g. a note
-    // that many chips set the register-address MSB for reads (ADXL345: 0x80 | reg).
     expect(art.fill_in_brief.quirks_todo).toMatch(/address bit convention/i);
+  });
+
+  it("is deterministic", () => {
+    expect(generatePortableDriver(spiDatasheet()).files).toEqual(art.files);
   });
 });
 
-describe("generatePortableDriver — SPI seam on a realistic multi-register part (TMAG5170 golden)", () => {
+describe("generatePortableDriver — SPI full-duplex seam on a realistic multi-register part (TMAG5170 golden)", () => {
   const json = spiRegisterDatasheet("tmag5170.golden.json", "TMAG5170");
   const art = generatePortableDriver(json);
   const header = art.files.find((f) => f.path === "tmag5170.h")!.content;
   const source = art.files.find((f) => f.path === "tmag5170.c")!.content;
 
-  it("uses the combined hal_spi_transfer seam, never the retired write/read pair", () => {
+  it("uses the prefixed combined tmag5170_hal_spi_transfer seam, never the retired write/read pair or a bare name", () => {
     expect(header).toContain(
-      "int hal_spi_transfer(const uint8_t *tx, uint16_t tx_len, uint8_t *rx, uint16_t rx_len);",
+      "int tmag5170_hal_spi_transfer(const uint8_t *tx, uint8_t *rx, uint16_t len);",
     );
     expect(header).not.toMatch(/hal_spi_write|hal_spi_read/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_spi_transfer\(/);
     expect(source).not.toMatch(/hal_spi_write|hal_spi_read/);
+    expect(source).not.toMatch(/[^_a-zA-Z0-9]hal_spi_transfer\(/);
   });
 
-  it("routes read_register/write_register through hal_spi_transfer", () => {
-    expect(source).toContain("hal_spi_transfer(&reg, 1, value, 1);");
-    expect(source).toContain("hal_spi_transfer(frame, 2, NULL, 0);");
+  it("routes read_register/write_register through the full-duplex tmag5170_hal_spi_transfer seam", () => {
+    const readFn = /tmag5170_read_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    const writeFn = /tmag5170_write_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
+    assertFullDuplexRead(readFn, "tmag5170_hal_spi_transfer");
+    assertFullDuplexWrite(writeFn, "tmag5170_hal_spi_transfer");
   });
 
   it("still flags the address bit convention quirk for this real part", () => {
@@ -127,57 +195,59 @@ describe("generatePortableDriver — SPI seam on a realistic multi-register part
   });
 });
 
-// Session B — UART bus family. UART has NO universal register-access primitive
-// (framing is device-specific: start bytes, command IDs, checksums — see
-// decisions: thin-hal-non-negotiable), so the generated read/write (or
-// send/read) bodies are a deliberate reasoning gap: a TODO(driverge) framing
-// marker over the raw hal_uart_write/hal_uart_read seam, never a real transfer.
-// fill_in_brief gains a NEW `framing_todo` field to hand that gap to the host AI.
-describe("generatePortableDriver — UART thin-HAL seam (MHZ19-shaped CO2 sensor, register_map)", () => {
+// UART bus family: framing is device-specific, so read/write bodies are a
+// TODO(driverge) reasoning gap over the raw hal_uart_write/hal_uart_read seam.
+// Session E: both the declarations AND the framing-gap prose now name the
+// per-driver PREFIXED seam functions (mhz19_hal_uart_write/read), not the
+// bare hal_uart_write/read family.
+describe("generatePortableDriver — UART thin-HAL prefixed seam (MHZ19-shaped CO2 sensor, register_map)", () => {
   const json = uartRegisterDatasheet("bme280.golden.json", "MHZ19");
   const art = generatePortableDriver(json);
   const header = art.files.find((f) => f.path === "mhz19.h")!.content;
   const source = art.files.find((f) => f.path === "mhz19.c")!.content;
 
-  it("declares the hal_uart_write/hal_uart_read seam plus hal_delay_ms — no hal_i2c_*/hal_spi_* anywhere", () => {
-    expect(header).toContain("void hal_uart_write(const uint8_t *data, uint16_t len);");
+  it("declares the prefixed mhz19_hal_uart_write/mhz19_hal_uart_read seam plus mhz19_hal_delay_ms — no hal_i2c_*/hal_spi_* anywhere, and no bare hal_uart_*/hal_delay_ms", () => {
+    expect(header).toContain("void mhz19_hal_uart_write(const uint8_t *data, uint16_t len);");
     expect(header).toContain(
-      "uint16_t hal_uart_read(uint8_t *data, uint16_t len, uint32_t timeout_ms);",
+      "uint16_t mhz19_hal_uart_read(uint8_t *data, uint16_t len, uint32_t timeout_ms);",
     );
-    expect(header).toContain("void hal_delay_ms (uint32_t ms);");
+    expect(header).toContain("void mhz19_hal_delay_ms (uint32_t ms);");
     expect(header).not.toMatch(/hal_i2c_|hal_spi_/);
     expect(source).not.toMatch(/hal_i2c_|hal_spi_/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_uart_write\(/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_uart_read\(/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_delay_ms\s*\(/);
   });
 
-  it("documents hal_uart_write/hal_uart_read semantics next to the seam declarations", () => {
+  it("documents mhz19_hal_uart_write/mhz19_hal_uart_read semantics next to the seam declarations", () => {
     const seamBlock = /\/\* Thin-HAL seam[\s\S]*?\/\* Driver handle/.exec(header)?.[0] ?? "";
-    expect(seamBlock).toMatch(/hal_uart_write/);
+    expect(seamBlock).toMatch(/mhz19_hal_uart_write/);
     expect(seamBlock).toMatch(/blocking write/i);
     expect(seamBlock).toMatch(/len bytes/i);
-    expect(seamBlock).toMatch(/hal_uart_read/);
+    expect(seamBlock).toMatch(/mhz19_hal_uart_read/);
     expect(seamBlock).toMatch(/up to.{0,10}len bytes/i);
     expect(seamBlock).toMatch(/timeout_ms/);
     expect(seamBlock).toMatch(/actually read/i);
   });
 
-  it("leaves read_register/write_register as TODO(driverge) framing gaps naming both seam functions", () => {
+  it("leaves read_register/write_register as TODO(driverge) framing gaps naming both PREFIXED seam functions", () => {
     const readFn = /mhz19_read_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
     const writeFn = /mhz19_write_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
     expect(readFn).toContain("TODO(driverge)");
     expect(readFn).toMatch(/frame/i);
-    expect(readFn).toMatch(/hal_uart_write/);
-    expect(readFn).toMatch(/hal_uart_read/);
+    expect(readFn).toContain("mhz19_hal_uart_write");
+    expect(readFn).toContain("mhz19_hal_uart_read");
     expect(writeFn).toContain("TODO(driverge)");
     expect(writeFn).toMatch(/frame/i);
-    expect(writeFn).toMatch(/hal_uart_write/);
-    expect(writeFn).toMatch(/hal_uart_read/);
+    expect(writeFn).toContain("mhz19_hal_uart_write");
+    expect(writeFn).toContain("mhz19_hal_uart_read");
   });
 
-  it("adds a framing_todo naming both seam functions and mentioning framing", () => {
+  it("adds a framing_todo naming both PREFIXED seam functions and mentioning framing", () => {
     expect(art.fill_in_brief.framing_todo).toBeDefined();
     expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
-    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_write");
-    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_read");
+    expect(art.fill_in_brief.framing_todo).toContain("mhz19_hal_uart_write");
+    expect(art.fill_in_brief.framing_todo).toContain("mhz19_hal_uart_read");
   });
 
   it("mentions checksum verification in quirks_todo", () => {
@@ -206,39 +276,41 @@ const uartCommandDatasheet = (): DatasheetJson =>
     validation: { valid: true, errors: [], warnings: [] },
   }) as unknown as DatasheetJson;
 
-describe("generatePortableDriver — UART command_set (MHZ19-shaped CO2 sensor)", () => {
+describe("generatePortableDriver — UART command_set prefixed seam (MHZ19-shaped CO2 sensor)", () => {
   const art = generatePortableDriver(uartCommandDatasheet());
   const header = art.files.find((f) => f.path === "mhz19.h")!.content;
   const source = art.files.find((f) => f.path === "mhz19.c")!.content;
 
-  it("declares the hal_uart_write/hal_uart_read seam and never an I2C device-address macro", () => {
-    expect(header).toContain("void hal_uart_write(const uint8_t *data, uint16_t len);");
+  it("declares the prefixed mhz19_hal_uart_write/mhz19_hal_uart_read seam and never an I2C device-address macro", () => {
+    expect(header).toContain("void mhz19_hal_uart_write(const uint8_t *data, uint16_t len);");
     expect(header).toContain(
-      "uint16_t hal_uart_read(uint8_t *data, uint16_t len, uint32_t timeout_ms);",
+      "uint16_t mhz19_hal_uart_read(uint8_t *data, uint16_t len, uint32_t timeout_ms);",
     );
     expect(header).not.toMatch(/hal_i2c_|hal_spi_/);
     expect(header).not.toMatch(/_I2C_ADDR/);
     expect(source).not.toMatch(/hal_i2c_|hal_spi_/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_uart_write\(/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_uart_read\(/);
   });
 
-  it("leaves send_command/read_data as TODO(driverge) framing gaps naming both seam functions", () => {
+  it("leaves send_command/read_data as TODO(driverge) framing gaps naming both PREFIXED seam functions", () => {
     const sendFn = /mhz19_send_command\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
     const readFn = /mhz19_read_data\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
     expect(sendFn).toContain("TODO(driverge)");
     expect(sendFn).toMatch(/frame/i);
-    expect(sendFn).toMatch(/hal_uart_write/);
-    expect(sendFn).toMatch(/hal_uart_read/);
+    expect(sendFn).toContain("mhz19_hal_uart_write");
+    expect(sendFn).toContain("mhz19_hal_uart_read");
     expect(readFn).toContain("TODO(driverge)");
     expect(readFn).toMatch(/frame/i);
-    expect(readFn).toMatch(/hal_uart_write/);
-    expect(readFn).toMatch(/hal_uart_read/);
+    expect(readFn).toContain("mhz19_hal_uart_write");
+    expect(readFn).toContain("mhz19_hal_uart_read");
   });
 
-  it("adds a framing_todo naming both seam functions and mentioning framing", () => {
+  it("adds a framing_todo naming both PREFIXED seam functions and mentioning framing", () => {
     expect(art.fill_in_brief.framing_todo).toBeDefined();
     expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
-    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_write");
-    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_read");
+    expect(art.fill_in_brief.framing_todo).toContain("mhz19_hal_uart_write");
+    expect(art.fill_in_brief.framing_todo).toContain("mhz19_hal_uart_read");
   });
 
   it("mentions checksum verification in quirks_todo", () => {
@@ -246,39 +318,31 @@ describe("generatePortableDriver — UART command_set (MHZ19-shaped CO2 sensor)"
   });
 });
 
-// Session C — CAN bus family (first pass). Like UART, CAN has NO universal
-// register-access primitive (register/config access over CAN is device-specific:
-// CANopen SDO, J1939 PGNs, raw message-ID schemes — see decisions:
-// thin-hal-non-negotiable), so read_register/write_register are a deliberate
-// TODO(driverge) framing gap over a SINGLE combined hal_can_transfer() seam call
-// (unlike UART's two-function write/read pair — one CAN transfer sends a frame to
-// an arbitration id and optionally waits for one response frame). STM32 is
-// explicitly OUT of scope this pass (bxCAN/FDCAN family split); ESP32 gets a TWAI
-// seam (see tests/codegen/esp32.test.ts).
+// CAN bus family: like UART, no universal register-access primitive, so
+// read/write are a TODO(driverge) framing gap over a single PREFIXED
+// hal_can_transfer() seam call.
 const canDatasheetName = "CANTEMP";
 
-describe("generatePortableDriver — CAN thin-HAL seam (CANTEMP-shaped, register_map)", () => {
+describe("generatePortableDriver — CAN thin-HAL prefixed seam (CANTEMP-shaped, register_map)", () => {
   const json = canRegisterDatasheet("bme280.golden.json", canDatasheetName);
   const art = generatePortableDriver(json);
   const header = art.files.find((f) => f.path === "cantemp.h")!.content;
   const source = art.files.find((f) => f.path === "cantemp.c")!.content;
 
-  it("declares the single combined hal_can_transfer seam plus hal_delay_ms — no hal_i2c_*/hal_spi_*/hal_uart_* anywhere", () => {
+  it("declares the single prefixed cantemp_hal_can_transfer seam plus cantemp_hal_delay_ms — no hal_i2c_*/hal_spi_*/hal_uart_* anywhere, and no bare cantemp seam names", () => {
     expect(header).toContain(
-      "int hal_can_transfer(uint32_t id, const uint8_t *tx, uint8_t tx_len, uint8_t *rx, uint8_t *rx_len, uint32_t timeout_ms);",
+      "int cantemp_hal_can_transfer(uint32_t id, const uint8_t *tx, uint8_t tx_len, uint8_t *rx, uint8_t *rx_len, uint32_t timeout_ms);",
     );
-    expect(header).toContain("void hal_delay_ms (uint32_t ms);");
+    expect(header).toContain("void cantemp_hal_delay_ms (uint32_t ms);");
     expect(header).not.toMatch(/hal_i2c_|hal_spi_|hal_uart_/);
     expect(source).not.toMatch(/hal_i2c_|hal_spi_|hal_uart_/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_can_transfer\(/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_delay_ms\s*\(/);
   });
 
-  it("documents hal_can_transfer semantics next to the seam declaration", () => {
+  it("documents cantemp_hal_can_transfer semantics next to the seam declaration", () => {
     const seamBlock = /\/\* Thin-HAL seam[\s\S]*?\/\* Driver handle/.exec(header)?.[0] ?? "";
-    expect(seamBlock).toMatch(/hal_can_transfer/);
-    // Stable contract phrases the coder's comment must include (case-insensitive):
-    // one call = one CAN frame sent to an arbitration id, 0 on success, and
-    // rx_len's dual in/out role (in: caller-supplied buffer capacity; out:
-    // bytes actually received).
+    expect(seamBlock).toMatch(/cantemp_hal_can_transfer/);
     expect(seamBlock).toMatch(/one CAN frame/i);
     expect(seamBlock).toMatch(/arbitration id/i);
     expect(seamBlock).toMatch(/0 on success/i);
@@ -286,29 +350,23 @@ describe("generatePortableDriver — CAN thin-HAL seam (CANTEMP-shaped, register
     expect(seamBlock).toMatch(/actually received/i);
   });
 
-  it("leaves read_register/write_register as TODO(driverge) framing gaps naming hal_can_transfer", () => {
+  it("leaves read_register/write_register as TODO(driverge) framing gaps naming the PREFIXED cantemp_hal_can_transfer", () => {
     const readFn = /cantemp_read_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
     const writeFn = /cantemp_write_register\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
     expect(readFn).toContain("TODO(driverge)");
     expect(readFn).toMatch(/frame/i);
-    expect(readFn).toContain("hal_can_transfer");
+    expect(readFn).toContain("cantemp_hal_can_transfer");
     expect(writeFn).toContain("TODO(driverge)");
     expect(writeFn).toMatch(/frame/i);
-    expect(writeFn).toContain("hal_can_transfer");
+    expect(writeFn).toContain("cantemp_hal_can_transfer");
   });
 
-  it("adds a framing_todo naming hal_can_transfer and mentioning framing", () => {
+  it("adds a framing_todo naming the PREFIXED cantemp_hal_can_transfer and mentioning framing", () => {
     expect(art.fill_in_brief.framing_todo).toBeDefined();
     expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
-    expect(art.fill_in_brief.framing_todo).toContain("hal_can_transfer");
+    expect(art.fill_in_brief.framing_todo).toContain("cantemp_hal_can_transfer");
   });
 
-  // Contract decision (documented for the coder): CAN's quirks_todo must name the
-  // CAN-specific reasoning gap — which arbitration id / SDO index / message ID
-  // maps to which register — NOT a generic "verify the checksum" line reused
-  // verbatim from UART. Pin: /arbitration|SDO|message.?id/i. This is deliberately
-  // an OR of near-synonymous CAN vocabulary (any one is an honest answer), not a
-  // vague catch-all — plain checksum wording alone must NOT satisfy it.
   it("mentions arbitration id / SDO / message-ID reasoning in quirks_todo (CAN-specific wording, not generic checksum wording)", () => {
     expect(art.fill_in_brief.quirks_todo).toMatch(/arbitration|SDO|message.?id/i);
   });
@@ -335,35 +393,36 @@ const canCommandDatasheet = (): DatasheetJson =>
     validation: { valid: true, errors: [], warnings: [] },
   }) as unknown as DatasheetJson;
 
-describe("generatePortableDriver — CAN command_set (CANTEMP-shaped)", () => {
+describe("generatePortableDriver — CAN command_set prefixed seam (CANTEMP-shaped)", () => {
   const art = generatePortableDriver(canCommandDatasheet());
   const header = art.files.find((f) => f.path === "cantemp.h")!.content;
   const source = art.files.find((f) => f.path === "cantemp.c")!.content;
 
-  it("declares the hal_can_transfer seam and never an I2C/UART device-address macro", () => {
+  it("declares the prefixed cantemp_hal_can_transfer seam and never an I2C/UART device-address macro", () => {
     expect(header).toContain(
-      "int hal_can_transfer(uint32_t id, const uint8_t *tx, uint8_t tx_len, uint8_t *rx, uint8_t *rx_len, uint32_t timeout_ms);",
+      "int cantemp_hal_can_transfer(uint32_t id, const uint8_t *tx, uint8_t tx_len, uint8_t *rx, uint8_t *rx_len, uint32_t timeout_ms);",
     );
     expect(header).not.toMatch(/hal_i2c_|hal_spi_|hal_uart_/);
     expect(header).not.toMatch(/_I2C_ADDR/);
     expect(source).not.toMatch(/hal_i2c_|hal_spi_|hal_uart_/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_can_transfer\(/);
   });
 
-  it("leaves send_command/read_data as TODO(driverge) framing gaps naming hal_can_transfer", () => {
+  it("leaves send_command/read_data as TODO(driverge) framing gaps naming the PREFIXED cantemp_hal_can_transfer", () => {
     const sendFn = /cantemp_send_command\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
     const readFn = /cantemp_read_data\([\s\S]*?\n\}/.exec(source)?.[0] ?? "";
     expect(sendFn).toContain("TODO(driverge)");
     expect(sendFn).toMatch(/frame/i);
-    expect(sendFn).toContain("hal_can_transfer");
+    expect(sendFn).toContain("cantemp_hal_can_transfer");
     expect(readFn).toContain("TODO(driverge)");
     expect(readFn).toMatch(/frame/i);
-    expect(readFn).toContain("hal_can_transfer");
+    expect(readFn).toContain("cantemp_hal_can_transfer");
   });
 
-  it("adds a framing_todo naming hal_can_transfer and mentioning framing", () => {
+  it("adds a framing_todo naming the PREFIXED cantemp_hal_can_transfer and mentioning framing", () => {
     expect(art.fill_in_brief.framing_todo).toBeDefined();
     expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
-    expect(art.fill_in_brief.framing_todo).toContain("hal_can_transfer");
+    expect(art.fill_in_brief.framing_todo).toContain("cantemp_hal_can_transfer");
   });
 
   it("mentions arbitration id / SDO / message-ID reasoning in quirks_todo (CAN-specific wording)", () => {
@@ -371,10 +430,6 @@ describe("generatePortableDriver — CAN command_set (CANTEMP-shaped)", () => {
   });
 });
 
-// Session C adds a second bus to this "no universal register-access primitive"
-// family (CAN, alongside UART) — see the CAN-specific describe blocks above this
-// one for the positive framing_todo pins; this block only re-confirms I2C/SPI
-// still never get one.
 describe("generatePortableDriver — framing_todo is a UART/CAN-only reasoning gap (absent for I2C/SPI)", () => {
   it("is undefined for an I2C register_map part (BME280)", () => {
     const art = generatePortableDriver(registerDatasheet("bme280.golden.json", "BME280"));
@@ -392,7 +447,7 @@ describe("generatePortableDriver — framing_todo is a UART/CAN-only reasoning g
   });
 });
 
-describe("generatePortableDriver — register_map (BME280 golden)", () => {
+describe("generatePortableDriver — register_map (BME280 golden), I2C prefixed seam", () => {
   const json = registerDatasheet("bme280.golden.json", "BME280");
   const art = generatePortableDriver(json);
   const header = art.files.find((f) => f.path === "bme280.h")!.content;
@@ -417,20 +472,27 @@ describe("generatePortableDriver — register_map (BME280 golden)", () => {
     expect(header).toContain("#define BME280_STATUS_MEASURING_SHIFT 3");
   });
 
-  it("declares only the thin-HAL seam and routes reads/writes through it", () => {
-    expect(header).toContain("int hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);");
-    expect(header).toContain("int hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);");
-    expect(header).toContain("void hal_delay_ms (uint32_t ms);");
-    expect(source).toContain("hal_i2c_read(dev->i2c_addr, reg, value, 1);");
+  it("declares only the PREFIXED thin-HAL seam and routes reads/writes through it — no bare hal_i2c_*/hal_delay_ms", () => {
+    expect(header).toContain(
+      "int bme280_hal_i2c_write(uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+    );
+    expect(header).toContain(
+      "int bme280_hal_i2c_read (uint8_t addr, uint8_t reg, uint8_t *data, uint16_t len);",
+    );
+    expect(header).toContain("void bme280_hal_delay_ms (uint32_t ms);");
+    expect(source).toContain("bme280_hal_i2c_read(dev->i2c_addr, reg, value, 1);");
     expect(source).not.toMatch(/HAL_I2C_|Wire\.|i2c_master_/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_i2c_write\(/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_i2c_read\s*\(/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_delay_ms\s*\(/);
   });
 
   // A7 (raw/DRIVERGE_ISSUES.md): the seam returns int (0 = success) and the
   // driver core PROPAGATES it — a NACK/bus error must reach the caller instead
   // of being swallowed by an unconditional `return 0`.
-  it("propagates the I2C seam status out of read_register/write_register (no swallowed errors)", () => {
-    expect(source).toContain("return hal_i2c_read(dev->i2c_addr, reg, value, 1);");
-    expect(source).toContain("return hal_i2c_write(dev->i2c_addr, reg, &value, 1);");
+  it("propagates the PREFIXED I2C seam status out of read_register/write_register (no swallowed errors)", () => {
+    expect(source).toContain("return bme280_hal_i2c_read(dev->i2c_addr, reg, value, 1);");
+    expect(source).toContain("return bme280_hal_i2c_write(dev->i2c_addr, reg, &value, 1);");
   });
 
   it("marks reasoning gaps with TODO(driverge) and a matching brief", () => {
@@ -446,7 +508,7 @@ describe("generatePortableDriver — register_map (BME280 golden)", () => {
   });
 });
 
-describe("generatePortableDriver — command_set (SHT3x golden)", () => {
+describe("generatePortableDriver — command_set (SHT3x golden), I2C prefixed seam", () => {
   const art = generatePortableDriver(commandDatasheet());
   const header = art.files.find((f) => f.path === "sht3x.h")!.content;
   const source = art.files.find((f) => f.path === "sht3x.c")!.content;
@@ -458,9 +520,10 @@ describe("generatePortableDriver — command_set (SHT3x golden)", () => {
     expect(header).toContain("#define SHT3X_CRC_INIT 0xFF");
   });
 
-  it("emits a wire-correct send_command and a CRC stub behind TODO", () => {
+  it("emits a wire-correct send_command through the PREFIXED sht3x_hal_i2c_write seam and a CRC stub behind TODO", () => {
     expect(header).toContain("int sht3x_send_command(sht3x_t *dev, uint16_t command);");
-    expect(source).toContain("hal_i2c_write(dev->i2c_addr, msb, &lsb, 1);");
+    expect(source).toContain("sht3x_hal_i2c_write(dev->i2c_addr, msb, &lsb, 1);");
+    expect(source).not.toMatch(/[^_a-zA-Z0-9]hal_i2c_write\(/);
     expect(source).toContain("uint8_t sht3x_crc8(const uint8_t *data, uint16_t len)");
     expect(art.fill_in_brief.crc_todo).toMatch(/CRC-8/);
   });

@@ -399,3 +399,206 @@ describe("lintDriver — 16-bit register masks", () => {
     expect(r.valid).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Session E (2026-07-11 STM32 field-test findings — CAP1206/TUSS4470/FXL6408,
+// raw/stm32-test-results/*.md + the approved plan): every thin-HAL seam symbol
+// is now PER-DRIVER PREFIXED (`<slug>_hal_*`, slug = slug(json.metadata.part)).
+// lintDriver's HAL_ALLOWED / scan regex must recognize this family, keyed off
+// the SAME json passed to lintDriver.
+// ---------------------------------------------------------------------------
+
+describe("lintDriver — per-driver prefixed seam family (<slug>_hal_*, field-test regression)", () => {
+  const capJson: DatasheetJson = {
+    metadata: {
+      part: "CAP1206",
+      manufacturer: "Microchip",
+      manufacturerConfidence: 1,
+      pdfType: "text_based",
+      pageCount: 1,
+    },
+    protocol: { bus: "I2C", addresses: ["0x28"] },
+    interface: {
+      kind: "register_map",
+      registers: [
+        { name: "ctrl", address: "0x00", reset: "0x00", width: 8, bitFields: [] },
+      ] as never,
+    },
+    validation: { valid: true, errors: [], warnings: [] },
+  };
+  const capSkeleton = generatePortableDriver(capJson).files;
+  const completedCap = (): GeneratedFile[] =>
+    capSkeleton.map((f) => ({
+      path: f.path,
+      content: f.content.replace(/TODO\(driverge\)/g, "done"),
+    }));
+
+  it("passes a completed driver that calls only its OWN prefixed seam (cap1206_hal_i2c_read/write/delay_ms) — the generator itself must emit the prefixed names", () => {
+    const files = completedCap();
+    const core = files.find((f) => f.path.endsWith(".c"))!.content;
+    // Ties the generator output to the lint contract: a driver whose core does
+    // NOT call the prefixed seam at all cannot honestly exercise this pin.
+    expect(core).toContain("cap1206_hal_i2c_write");
+    expect(core).toContain("cap1206_hal_delay_ms");
+    const r = lintDriver(files, capJson);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+    expect(r.warnings.filter((w) => /unprefixed/i.test(w))).toEqual([]);
+  });
+
+  // CRITICAL regression pin (the actual CAP1206 field-test blind spot): the
+  // OLD scan regex `/\bhal_[a-z0-9_]+/` requires a word boundary immediately
+  // before "hal_" — but "cap1206_hal_i2c_wrte" has "_" (a word character)
+  // right before "hal_", so there is NO boundary there and the old regex
+  // never even sees this token. A driver whose core mistypes a PREFIXED seam
+  // call must still be caught as an unknown HAL function.
+  it("CRITICAL: catches a mistyped prefixed seam call (cap1206_hal_i2c_wrte) that the old bare \\bhal_ scan could never see", () => {
+    const mistyped = completedCap().map((f) =>
+      f.path.endsWith(".c")
+        ? {
+            path: f.path,
+            content: f.content.replace(
+              "return 0;",
+              "cap1206_hal_i2c_wrte(0,0,0,0);\n    return 0;",
+            ),
+          }
+        : f,
+    );
+    const r = lintDriver(mistyped, capJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/cap1206_hal_i2c_wrte/);
+  });
+
+  it("rejects an unknown prefixed seam function (cap1206_hal_foo — right prefix, wrong family member)", () => {
+    const withUnknown = completedCap().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", "cap1206_hal_foo(0);\n    return 0;") }
+        : f,
+    );
+    const r = lintDriver(withUnknown, capJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/cap1206_hal_foo/);
+  });
+
+  it("downgrades a bare LEGACY seam call (hal_i2c_write) to a warning, not an error — driver stays valid", () => {
+    const withBare = completedCap().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", "hal_i2c_write(0,0,0,0);\n    return 0;") }
+        : f,
+    );
+    const r = lintDriver(withBare, capJson);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join("\n")).toMatch(
+      /unprefixed seam symbol — collides in multi-driver projects/i,
+    );
+    expect(r.warnings.join("\n")).toMatch(/hal_i2c_write/);
+  });
+
+  it("downgrades bare hal_delay_ms to a warning too (the exact symbol from the field-test link collisions)", () => {
+    const withBare = completedCap().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", "hal_delay_ms(1);\n    return 0;") }
+        : f,
+    );
+    const r = lintDriver(withBare, capJson);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join("\n")).toMatch(/unprefixed seam symbol/i);
+    expect(r.warnings.join("\n")).toMatch(/hal_delay_ms/);
+  });
+
+  it("still hard-errors a bare UNKNOWN seam call (hal_gpio_set) — not eligible for the warning downgrade", () => {
+    const withUnknownBare = completedCap().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", "hal_gpio_set(1);\n    return 0;") }
+        : f,
+    );
+    const r = lintDriver(withUnknownBare, capJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/hal_gpio_set/);
+  });
+
+  it("still hard-errors the retired bare hal_spi_write/hal_spi_read (never a legal name, prefixed or not)", () => {
+    const withRetired = completedCap().map((f) =>
+      f.path.endsWith(".c")
+        ? { path: f.path, content: f.content.replace("return 0;", "hal_spi_write(0,0);\n    return 0;") }
+        : f,
+    );
+    const r = lintDriver(withRetired, capJson);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/hal_spi_write/);
+  });
+});
+
+describe("lintDriver — seam companion header (_hal_<target>.h/.hpp) is exempt from core purity (isHalImpl covers headers too)", () => {
+  // Concrete field-test shape (CAP1206/FXL6408 reports): the ESP32 companion
+  // header declares a bind() prototype using vendor handle types (e.g.
+  // i2c_master_bus_handle_t), which matches FORBIDDEN's ESP-IDF regex
+  // (`\bi2c_master_\w+`). isHalImpl's regex is `_hal_[a-z0-9]+\.(?:c|cpp)$`
+  // today — it does NOT match ".h"/".hpp", so a companion header is
+  // (incorrectly) scanned as core content and trips the ESP-IDF FORBIDDEN
+  // check even though it is legitimate seam-implementation surface.
+  it("does not flag ESP-IDF vendor types (i2c_master_bus_handle_t) inside a bme280_hal_esp32.h companion header", () => {
+    const header: GeneratedFile = {
+      path: "bme280_hal_esp32.h",
+      content: [
+        "#ifndef BME280_HAL_ESP32_H",
+        "#define BME280_HAL_ESP32_H",
+        "",
+        "#ifdef __cplusplus",
+        'extern "C" {',
+        "#endif",
+        "",
+        '#include "driver/i2c_master.h"',
+        "",
+        "esp_err_t bme280_esp32_bind(i2c_master_bus_handle_t bus, uint32_t scl_speed_hz);",
+        "",
+        "#ifdef __cplusplus",
+        "}",
+        "#endif",
+        "#endif /* BME280_HAL_ESP32_H */",
+        "",
+      ].join("\n"),
+    };
+    const r = lintDriver([...completed(), header], json);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+  });
+
+  it("does the same for a C++ companion header (.hpp) — isHalImpl covers both extensions", () => {
+    const header: GeneratedFile = {
+      path: "bme280_hal_esp32.hpp",
+      content: [
+        "#ifndef BME280_HAL_ESP32_HPP",
+        "#define BME280_HAL_ESP32_HPP",
+        "",
+        "#ifdef __cplusplus",
+        'extern "C" {',
+        "#endif",
+        "",
+        '#include "driver/i2c_master.h"',
+        "",
+        "esp_err_t bme280_esp32_bind(i2c_master_bus_handle_t bus, uint32_t scl_speed_hz);",
+        "",
+        "#ifdef __cplusplus",
+        "}",
+        "#endif",
+        "#endif /* BME280_HAL_ESP32_HPP */",
+        "",
+      ].join("\n"),
+    };
+    const r = lintDriver([...completed(), header], json);
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+  });
+
+  it("regression contrast: the SAME i2c_master_bus_handle_t content DOES trip FORBIDDEN when it leaks into the core (non-exempt filename)", () => {
+    const leaked = withSource((c) =>
+      c.replace("return 0;", "i2c_master_bus_handle_t bogus;\n    return 0;"),
+    );
+    const r = lintDriver(leaked, json);
+    expect(r.valid).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/ESP-IDF/);
+  });
+});

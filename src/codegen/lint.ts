@@ -6,7 +6,7 @@
 
 import { registerWidth, type Register } from "../pdf/types.js";
 import type { Command, DatasheetJson, ValidationResult } from "../schema/types.js";
-import { fieldMask, macro, maskHex, prefixOf } from "./ident.js";
+import { fieldMask, macro, maskHex, prefixOf, slug } from "./ident.js";
 import type { GeneratedFile } from "./types.js";
 
 // Vendor peripheral APIs that must NEVER appear in a portable/thin-HAL driver —
@@ -22,13 +22,32 @@ const FORBIDDEN: ReadonlyArray<{ re: RegExp; api: string }> = [
 ];
 
 // Allowed thin-HAL seam functions (families). SPI is a single combined
-// hal_spi_transfer(tx, tx_len, rx, rx_len) — one call per CS-framed transaction —
-// not a hal_spi_write/hal_spi_read pair; those are retired and must lint as
-// unknown HAL functions (see decisions: thin-hal-non-negotiable). UART
-// (Session B) adds hal_uart_write/hal_uart_read; CAN (Session C) adds the
+// <slug>_hal_spi_transfer(tx, rx, len) — one full-duplex call per CS-framed
+// transaction — not a hal_spi_write/hal_spi_read pair; those are retired and
+// must lint as unknown HAL functions (see decisions: thin-hal-non-negotiable).
+// UART (Session B) adds hal_uart_write/hal_uart_read; CAN (Session C) adds the
 // single combined hal_can_transfer — any other hal_uart_*/hal_can_* name (e.g.
 // a hypothetical hal_uart_flush or hal_can_filter) must still lint as unknown.
-const HAL_ALLOWED = /^hal_(?:i2c_(?:read|write)|spi_transfer|uart_(?:write|read)|can_transfer|delay_ms)$/;
+//
+// Session E (2026-07-11 field-test findings — CAP1206/TUSS4470/FXL6408): every
+// seam symbol is now PER-DRIVER PREFIXED (`<slug>_hal_*`, slug =
+// slug(json.metadata.part) — see busSeam in portable.ts). A completed driver's
+// core is expected to call ITS OWN prefixed family (allowedPrefixed, built per
+// lintDriver call from the json argument); a BARE legacy name (no prefix) is
+// downgraded to a warning — it still compiles and still works for a
+// single-driver project, but collides at link the moment a second Driverge
+// driver joins the project (the CAP1206/TUSS4470 field-test failure) — while a
+// bare name that was never part of the seam family at all (hal_gpio_set,
+// retired hal_spi_write/hal_spi_read, ...) stays a hard error.
+const BARE_HAL_ALLOWED =
+  /^hal_(?:i2c_(?:read|write)|spi_transfer|uart_(?:write|read)|can_transfer|delay_ms)$/;
+
+/** The PREFIXED family regex for one driver's own seam slug. */
+function prefixedHalAllowed(name: string): RegExp {
+  return new RegExp(
+    `^${name}_hal_(?:i2c_(?:read|write)|spi_transfer|uart_(?:write|read)|can_transfer|delay_ms)$`,
+  );
+}
 
 function balanced(text: string, open: string, close: string): boolean {
   let depth = 0;
@@ -50,6 +69,12 @@ export function lintDriver(
   const errors: string[] = [];
   const warnings: string[] = [];
   const prefix = prefixOf(json.metadata.part);
+  // The seam slug — same derivation as busSeam(name)'s caller (portable.ts's
+  // generatePortableDriver): slug(json.metadata.part), "device" if empty. Every
+  // scan below that recognizes this driver's OWN prefixed seam family is keyed
+  // off this, not `prefix` (which is the #define/macro prefix, e.g. "BME280" —
+  // a different casing/derivation used for register/command constants only).
+  const name = slug(json.metadata.part);
   const all = files.map((f) => `/* ${f.path} */\n${f.content}`).join("\n\n");
   // Comments carry the TODO markers and prose; strip them before code-shape checks.
   // String/char literal BODIES are stripped too (after comments) so a stray brace
@@ -65,8 +90,12 @@ export function lintDriver(
       .replace(/'(?:\\.|[^'\\])*'/g, " ");
   const code = strip(all);
   // Thin-HAL purity applies to the driver CORE, not the seam implementation:
-  // a native target's <part>_hal_<target>.c is *where* platform calls belong.
-  const isHalImpl = (p: string) => /_hal_[a-z0-9]+\.(?:c|cpp)$/i.test(p);
+  // a native target's <part>_hal_<target>.c/.h is *where* platform calls (and
+  // vendor handle types) belong. Extends to .h/.hpp (Session E): the seam
+  // companion header (`<slug>_hal_<target>.h`) declares the *_bind() prototype
+  // using vendor types (e.g. i2c_master_bus_handle_t), which would otherwise
+  // trip the ESP-IDF FORBIDDEN regex even though it is legitimate seam surface.
+  const isHalImpl = (p: string) => /_hal_[a-z0-9]+\.(?:c|cpp|h|hpp)$/i.test(p);
   const coreCode = strip(
     files.filter((f) => !isHalImpl(f.path)).map((f) => f.content).join("\n"),
   );
@@ -85,8 +114,38 @@ export function lintDriver(
   for (const { re, api } of FORBIDDEN) {
     if (re.test(coreCode)) errors.push(`direct ${api} call — bus access must go through the hal_* seam`);
   }
+  // 3a. This driver's OWN per-driver-prefixed seam family (`<name>_hal_*`).
+  // Matched FIRST and independently of the bare scan below: a word boundary
+  // (`\b`) sits right before `name`, not right before "hal_" — this is exactly
+  // what lets a mistyped prefixed call (e.g. "cap1206_hal_i2c_wrte") get
+  // caught at all. The old bare-only scan (`\bhal_...`) could never see it,
+  // because the "_" immediately before "hal_" in a prefixed identifier is a
+  // word character, so `\b` never matches there (the CAP1206 field-test blind
+  // spot this session fixes).
+  const allowedPrefixed = prefixedHalAllowed(name);
+  for (const m of coreCode.matchAll(new RegExp(`\\b${name}_hal_[a-z0-9_]+`, "g"))) {
+    if (!allowedPrefixed.test(m[0])) {
+      errors.push(
+        `unknown HAL function "${m[0]}" — thin HAL is ${name}_hal_i2c_*/${name}_hal_spi_*/${name}_hal_uart_*/${name}_hal_can_transfer/${name}_hal_delay_ms only`,
+      );
+    }
+  }
+  // 3b. Bare (unprefixed) hal_* calls. A truly bare occurrence never satisfies
+  // 3a's `\b${name}_hal_` pattern (there is no "<name>_" immediately before
+  // it), so there is no double-count between the two scans. A bare name that
+  // IS a legacy-allowed seam function name (hal_i2c_read/write,
+  // hal_spi_transfer, hal_uart_write/read, hal_can_transfer, hal_delay_ms)
+  // still compiles and works in a single-driver project, so it is only a
+  // WARNING — collides at link the moment a second Driverge driver joins the
+  // project (see raw/stm32-test-results/*.md). A bare name that was never part
+  // of the seam family (hal_gpio_set, retired hal_spi_write/hal_spi_read, ...)
+  // stays a hard ERROR, exactly as before.
   for (const m of coreCode.matchAll(/\bhal_[a-z0-9_]+/g)) {
-    if (!HAL_ALLOWED.test(m[0])) {
+    if (BARE_HAL_ALLOWED.test(m[0])) {
+      warnings.push(
+        `unprefixed seam symbol — collides in multi-driver projects: "${m[0]}" (prefer ${name}_${m[0]})`,
+      );
+    } else {
       errors.push(
         `unknown HAL function "${m[0]}" — thin HAL is hal_i2c_*/hal_spi_*/hal_uart_*/hal_can_transfer/hal_delay_ms only`,
       );

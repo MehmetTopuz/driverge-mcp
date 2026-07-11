@@ -74,8 +74,9 @@ describe("generatePortableDriver — deferred register map", () => {
     expect(header).toContain("23");
   });
 
-  it("still emits the thin-HAL seam and the read/write register stubs", () => {
-    expect(header).toContain("void hal_delay_ms (uint32_t ms);");
+  it("still emits the PREFIXED thin-HAL seam and the read/write register stubs", () => {
+    expect(header).toContain("void aeat8811_hal_delay_ms (uint32_t ms);");
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_delay_ms\s*\(/);
     expect(source).toContain("aeat8811_read_register");
     expect(source).toContain("aeat8811_write_register");
   });
@@ -159,12 +160,14 @@ describe("generatePortableDriver — deferred register map (UART, Session B)", (
   const art = generatePortableDriver(deferredUart);
   const header = art.files[0].content;
 
-  it("still renders the UART seam even with an empty register map", () => {
-    expect(header).toContain("void hal_uart_write(const uint8_t *data, uint16_t len);");
+  it("still renders the PREFIXED UART seam even with an empty register map", () => {
+    expect(header).toContain("void mhz19_hal_uart_write(const uint8_t *data, uint16_t len);");
     expect(header).toContain(
-      "uint16_t hal_uart_read(uint8_t *data, uint16_t len, uint32_t timeout_ms);",
+      "uint16_t mhz19_hal_uart_read(uint8_t *data, uint16_t len, uint32_t timeout_ms);",
     );
     expect(header).not.toMatch(/hal_i2c_|hal_spi_/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_uart_write\(/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_uart_read\(/);
   });
 
   it("emits a register-map TODO(driverge) block naming the detected page", () => {
@@ -173,12 +176,12 @@ describe("generatePortableDriver — deferred register map (UART, Session B)", (
     expect(header).toContain("9");
   });
 
-  it("carries BOTH register_map_todo and framing_todo in the fill-in brief", () => {
+  it("carries BOTH register_map_todo and framing_todo in the fill-in brief, naming the PREFIXED seam", () => {
     expect(art.fill_in_brief.register_map_todo).toBeTruthy();
     expect(art.fill_in_brief.framing_todo).toBeTruthy();
     expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
-    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_write");
-    expect(art.fill_in_brief.framing_todo).toContain("hal_uart_read");
+    expect(art.fill_in_brief.framing_todo).toContain("mhz19_hal_uart_write");
+    expect(art.fill_in_brief.framing_todo).toContain("mhz19_hal_uart_read");
   });
 });
 
@@ -206,11 +209,12 @@ describe("generatePortableDriver — deferred register map (CAN, Session C)", ()
   const art = generatePortableDriver(deferredCan);
   const header = art.files[0].content;
 
-  it("still renders the CAN seam even with an empty register map", () => {
+  it("still renders the PREFIXED CAN seam even with an empty register map", () => {
     expect(header).toContain(
-      "int hal_can_transfer(uint32_t id, const uint8_t *tx, uint8_t tx_len, uint8_t *rx, uint8_t *rx_len, uint32_t timeout_ms);",
+      "int cantemp_hal_can_transfer(uint32_t id, const uint8_t *tx, uint8_t tx_len, uint8_t *rx, uint8_t *rx_len, uint32_t timeout_ms);",
     );
     expect(header).not.toMatch(/hal_i2c_|hal_spi_|hal_uart_/);
+    expect(header).not.toMatch(/[^_a-zA-Z0-9]hal_can_transfer\(/);
   });
 
   it("emits a register-map TODO(driverge) block naming the detected page", () => {
@@ -219,11 +223,11 @@ describe("generatePortableDriver — deferred register map (CAN, Session C)", ()
     expect(header).toContain("11");
   });
 
-  it("carries BOTH register_map_todo and framing_todo in the fill-in brief", () => {
+  it("carries BOTH register_map_todo and framing_todo in the fill-in brief, naming the PREFIXED seam", () => {
     expect(art.fill_in_brief.register_map_todo).toBeTruthy();
     expect(art.fill_in_brief.framing_todo).toBeTruthy();
     expect(art.fill_in_brief.framing_todo).toMatch(/frame/i);
-    expect(art.fill_in_brief.framing_todo).toContain("hal_can_transfer");
+    expect(art.fill_in_brief.framing_todo).toContain("cantemp_hal_can_transfer");
   });
 
   it("propagates the deferred skeleton to the esp32 target for a CAN part too (Session C native CAN/TWAI support)", () => {

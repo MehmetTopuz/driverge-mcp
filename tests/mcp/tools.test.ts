@@ -146,9 +146,12 @@ describe("Driverge MCP surface", () => {
     });
     expect((result as ToolResult).isError).toBeFalsy();
     const artifact = JSON.parse(firstText(result));
+    // Session E: the artifact gained the seam companion header, ordered
+    // [core.h, core.c, companion.h, seam.c] (see tests/codegen/esp32.test.ts).
     expect(artifact.files.map((f: { path: string }) => f.path)).toEqual([
       "bme280.h",
       "bme280.c",
+      "bme280_hal_esp32.h",
       "bme280_hal_esp32.c",
     ]);
   });
@@ -498,7 +501,11 @@ describe("Driverge MCP surface", () => {
     // Amended (orchestrator, post-GREEN 4b3da14/d576ba6): the cpp seam is
     // `_hal_esp32.cpp`, not `.c` — the `.c` seam `#include`s "bme280.h", which
     // doesn't exist in a cpp bundle. See tests/codegen/cpp-native.test.ts.
-    it('with language "cpp", a native target (esp32) gets a `_hal_esp32.cpp` seam file — no .h file anywhere', async () => {
+    // Amended again (Session E): the seam companion header joined the bundle
+    // and stays `.h` even for cpp (extern "C" guard makes it valid either
+    // way), so the pin narrows from "no .h anywhere" to "the ONLY .h is the
+    // companion — the core is .hpp/.cpp".
+    it('with language "cpp", a native target (esp32) gets a `_hal_esp32.cpp` seam file — the only .h is the companion header', async () => {
       const client = await connectClient();
       const result = await client.callTool({
         name: "generate_driver",
@@ -510,7 +517,7 @@ describe("Driverge MCP surface", () => {
       expect(paths).toContain("bme280_hal_esp32.cpp");
       expect(paths).toContain("bme280.hpp");
       expect(paths).toContain("bme280.cpp");
-      expect(paths.some((p: string) => p.endsWith(".h"))).toBe(false);
+      expect(paths.filter((p: string) => p.endsWith(".h"))).toEqual(["bme280_hal_esp32.h"]);
       for (const f of artifact.files as { path: string; content: string }[]) {
         expect(f.content).not.toContain('"bme280.h"');
       }
