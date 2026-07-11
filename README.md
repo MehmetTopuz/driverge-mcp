@@ -441,6 +441,11 @@ datasheet prose, and `validate_driver` checks the result.
   (I²C, SPI, UART, CAN) ✅; C or C++ output ✅. *(current)*
 - **v1.0** — broader vendor/part coverage, STM32 CAN (bxCAN/FDCAN), and a
   stable, versioned JSON schema.
+- **Exploring, no committed timeline** — next-wave native targets: RP2040/RP2350,
+  TI MSPM0, NXP MCX/i.MX RT, Nuvoton NuMicro, Microchip PIC, and eventually
+  Zephyr. Named here so the [Supported targets](#supported-targets) note
+  pointing at "the Roadmap" has something to point at — not a promise these
+  ship by any date.
 - **v1.x** — new native MCU targets (same portable thin-HAL core, one seam
   file per platform; prioritized by beta-tester demand): **RP2040/RP2350**
   (pico-sdk), **TI MSPM0** (DriverLib), **NXP MCX / i.MX RT** (MCUXpresso

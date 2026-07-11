@@ -9,6 +9,16 @@ Entries are grouped by the commit area vocabulary from
 
 ## [Unreleased]
 
+### Docs
+
+- **README:** the Roadmap section now itemizes the "next-wave native targets"
+  (RP2040/RP2350, TI MSPM0, NXP MCX/i.MX RT, Nuvoton NuMicro, Microchip PIC,
+  Zephyr) that the Supported-targets note already pointed readers at — the
+  cross-reference previously led to a Roadmap that didn't actually list them.
+  Deliberately labeled "no committed timeline" rather than folded into a
+  versioned (v0.x/v0.y/v1.0) tier, so it reads as an honest exploration list,
+  not a promised feature — see the "Upcoming features" naming discussion.
+
 ## [0.1.0-beta.3] - 2026-07-11
 
 Closed-beta iteration driven by three real-hardware STM32 field tests on a
