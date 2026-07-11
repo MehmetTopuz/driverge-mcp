@@ -4,7 +4,7 @@
 <p align="center"><em>Datasheet PDF → embedded C/C++ driver, from any MCP client.</em></p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/driverge-mcp"><img alt="npm" src="https://img.shields.io/npm/v/driverge-mcp"></a>
+  <a href="https://www.npmjs.com/package/driverge-mcp"><img alt="npm (beta)" src="https://img.shields.io/npm/v/driverge-mcp/beta"></a>
   <a href="https://github.com/MehmetTopuz/driverge-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MehmetTopuz/driverge-mcp/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="status" src="https://img.shields.io/badge/status-closed%20beta-orange">
@@ -110,7 +110,7 @@ changes.
 |---|---|---|---|---|
 | **Portable (thin-HAL)** | user-implemented `<part>_hal_*` seam | I²C, SPI, UART, CAN | C / C++ | **Beta** — host-tested, gcc-compiled in CI; not yet on hardware |
 | **ESP32** | ESP-IDF (`i2c_master_*`, `spi_master`, `uart`, TWAI) | I²C, SPI, UART, CAN | C / C++ | **Experimental** — one informal I²C bring-up; SPI/UART/CAN never on hardware |
-| **STM32** | CubeHAL (`HAL_I2C_*`, `HAL_SPI_*` + GPIO CS, `HAL_UART_*`) | I²C, SPI, UART | C / C++ | **Experimental** — never on hardware |
+| **STM32** | CubeHAL (`HAL_I2C_*`, `HAL_SPI_*` + GPIO CS, `HAL_UART_*`) | I²C, SPI, UART | C / C++ | **Experimental** — 3 hardware field tests (NUCLEO-G474RE, hand-completed); no automated compile gate yet |
 | **Arduino** | `Wire` / `SPI` | — | C++ | not implemented |
 
 STM32 CAN is planned (the bxCAN/FDCAN family split needs its own pass), and a
@@ -138,8 +138,8 @@ The extraction pipeline is regression-tested against real datasheets from
 | LSM6DSRX | STMicroelectronics | register map | 31 regs, 91 bit-fields |
 | MAX30102 | Maxim Integrated | register map | 20 regs, 33 bit-fields |
 
-Other tested parts (ADXL345, MLX90614, AEAT-8811, PCA9685, VL53L3CX, TLE5014)
-extract **partially** or **defer** to the host AI — the pipeline says so
+Other tested parts (ADXL345, MLX90614, AEAT-8811, PCA9685, VL53L3CX, TLE5014,
+TCA6408A) extract **partially** or **defer** to the host AI — the pipeline says so
 explicitly instead of guessing. The full, always-current matrix lives in the
 [coverage scorecard](tests/scorecard/scorecard.snap.md).
 
@@ -148,17 +148,20 @@ explicitly instead of guessing. The full, always-current matrix lives in the
 Driverge is in **closed beta** (`0.1.0-beta.x`, npm `beta` dist-tag).
 
 **Proven today (host-level):**
-- The full deterministic test suite is green (440-plus tests) on a clean
+- The full deterministic test suite is green (540-plus tests) on a clean
   TypeScript build, and the **portable** driver is compiled by a real `gcc`
-  gate in CI.
-- The extraction pipeline is regression-tested against **13 real datasheets**
-  and reports its own coverage honestly — 7 fully extracted, 3 partial, 3
+  gate in CI (including a multi-driver link gate).
+- The extraction pipeline is regression-tested against **14 real datasheets**
+  and reports its own coverage honestly — 7 fully extracted, 4 partial, 3
   deferred (see the [coverage scorecard](tests/scorecard/scorecard.snap.md)).
 
 **Not yet proven — this is the beta → v0.1.0 gate:**
-- **On-hardware behavior is not gated.** Only one informal ESP32 bring-up has
-  run (MPU-9250, hand-completed); there is no clean, repeatable hardware pass
-  yet, and STM32 has never run on silicon.
+- **On-hardware behavior is not gated by CI.** STM32 has now run on real
+  hardware — three NUCLEO-G474RE field tests (onsemi FXL6408 I²C, TI TUSS4470
+  SPI, Microchip CAP1206 I²C), each hand-completed and folded back into the
+  generator — and ESP32 has one informal I²C bring-up (MPU-9250). There is still
+  no clean, repeatable automated hardware pass, so every generated driver needs
+  review before you flash it.
 - The native ESP32/STM32 seams are not yet built by an automated compile gate
   (ESP-IDF / CubeIDE) — only the portable target is.
 - Only one MCP client has been exercised end-to-end.
@@ -283,6 +286,7 @@ development.
 | Env var | Default | Purpose |
 |---|---|---|
 | `DRIVERGE_OUT_ROOT` | server's working directory | Root that `generate_driver`'s `out_dir` writes are confined to. Any `out_dir` that resolves outside this root is rejected (`out_dir "…" escapes the allowed root`). Set it to the directory you want drivers written into. |
+| `DRIVERGE_MAX_PDF_BYTES` | `67108864` (64 MiB) | Maximum PDF size `analyze_datasheet` will read. A larger file is rejected with a clear "PDF too large" error before any parsing — bounds memory use on a hostile or accidentally huge input. |
 
 Set it in the MCP config's `env` block, e.g.:
 

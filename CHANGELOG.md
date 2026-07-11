@@ -86,6 +86,13 @@ those sessions is now generator/lint/parser behavior.
   placeholder under the mistaken belief the schema required concrete hex.
 - **README:** the thin-HAL seam table shows the prefixed names, the
   full-duplex SPI signature, and the seam companion headers.
+- **README:** corrected the host-level maturity claims — the test count
+  (540-plus), the scorecard coverage (14 datasheets: 7 complete / 4 partial /
+  3 deferred, adding TCA6408A), and the on-hardware status (STM32 has now run on
+  real hardware in three NUCLEO-G474RE field tests, no longer "never on
+  silicon", but still not gated by an automated hardware/compile pass);
+  documented the `DRIVERGE_MAX_PDF_BYTES` env var and pointed the npm version
+  badge at the `beta` dist-tag.
 
 ## [0.1.0-beta.2] - 2026-07-10
 
