@@ -80,7 +80,10 @@
       "properties": {
         "name": { "type": "string" },
         "address": { "type": "string" },
-        "reset": { "type": "string" },
+        "reset": {
+          "type": "string",
+          "description": "Verbatim reset/default cell. Non-hex text is valid — keep indeterminate or prose cells as printed (e.g. \"XXXXXXXX\", \"individual\") rather than inventing a hex placeholder; only well-formed hex values are range-checked against the register width."
+        },
         "width": {
           "description": "Register width in bits; absent means 8. Bounds bit-field indices and the reset value (enforced by the L5 validator).",
           "enum": [8, 16, 32]

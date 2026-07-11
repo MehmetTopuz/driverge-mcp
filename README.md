@@ -108,7 +108,7 @@ changes.
 
 | Target | Bus binding | Buses | Language | Maturity |
 |---|---|---|---|---|
-| **Portable (thin-HAL)** | user-implemented `hal_*` seam | I²C, SPI, UART, CAN | C / C++ | **Beta** — host-tested, gcc-compiled in CI; not yet on hardware |
+| **Portable (thin-HAL)** | user-implemented `<part>_hal_*` seam | I²C, SPI, UART, CAN | C / C++ | **Beta** — host-tested, gcc-compiled in CI; not yet on hardware |
 | **ESP32** | ESP-IDF (`i2c_master_*`, `spi_master`, `uart`, TWAI) | I²C, SPI, UART, CAN | C / C++ | **Experimental** — one informal I²C bring-up; SPI/UART/CAN never on hardware |
 | **STM32** | CubeHAL (`HAL_I2C_*`, `HAL_SPI_*` + GPIO CS, `HAL_UART_*`) | I²C, SPI, UART | C / C++ | **Experimental** — never on hardware |
 | **Arduino** | `Wire` / `SPI` | — | C++ | not implemented |
@@ -208,23 +208,27 @@ re-parse, and the full JSON stays readable at `driverge://datasheet/<ref>`.
 ### The thin-HAL seam
 
 Generated drivers touch hardware through a tiny per-bus seam — and nothing
-else:
+else. Seam symbols are **prefixed with the part's slug** (e.g.
+`bme280_hal_i2c_read`) so two Driverge drivers can link into one firmware
+image without symbol collisions:
 
-| Bus | Seam functions (plus `hal_delay_ms`) |
+| Bus | Seam functions (plus `<part>_hal_delay_ms`) |
 |---|---|
-| I²C | `hal_i2c_read`, `hal_i2c_write` |
-| SPI | `hal_spi_transfer` (one call = one CS-framed transaction) |
-| UART | `hal_uart_write`, `hal_uart_read` |
-| CAN | `hal_can_transfer` (one call = one frame exchange) |
+| I²C | `<part>_hal_i2c_read`, `<part>_hal_i2c_write` |
+| SPI | `<part>_hal_spi_transfer(tx, rx, len)` (one call = one CS-framed **full-duplex** transaction; `rx` may be `NULL` for write-only, and write-then-read devices are served by padding `tx` with dummy bytes) |
+| UART | `<part>_hal_uart_write`, `<part>_hal_uart_read` |
+| CAN | `<part>_hal_can_transfer` (one call = one frame exchange) |
 
 The transfer seams return `int` — **`0` on success, non-zero on a bus error**
 (NACK, timeout) — and the generated register accessors propagate that status
 instead of swallowing it; native seams (ESP32, STM32) return their vendor
-status, which is already `0` on success. `validate_driver` enforces seam
-purity: a driver that calls a vendor peripheral API outside the seam fails the
-lint. Buses with no universal register-access primitive (UART, CAN) get their
-device-specific framing as a marked `TODO(driverge)` gap, completed by the host
-AI and then linted.
+status, which is already `0` on success. Native targets also emit a seam
+companion header (`<part>_hal_stm32.h` / `<part>_hal_esp32.h`) declaring the
+one-time `bind` call that points the seam at your peripheral handle.
+`validate_driver` enforces seam purity: a driver that calls a vendor
+peripheral API outside the seam fails the lint. Buses with no universal
+register-access primitive (UART, CAN) get their device-specific framing as a
+marked `TODO(driverge)` gap, completed by the host AI and then linted.
 
 ### The fill-in loop
 

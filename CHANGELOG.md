@@ -9,6 +9,84 @@ Entries are grouped by the commit area vocabulary from
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] - 2026-07-11
+
+Closed-beta iteration driven by three real-hardware STM32 field tests on a
+NUCLEO-G474RE (onsemi FXL6408 I²C, TI TUSS4470 SPI, Microchip CAP1206 I²C —
+session reports in `raw/stm32-test-results/`). Every recurring manual fix from
+those sessions is now generator/lint/parser behavior.
+
+### Breaking
+
+- **Codegen:** every thin-HAL seam symbol is now **prefixed with the part
+  slug** — `hal_i2c_write` → `<part>_hal_i2c_write`, `hal_delay_ms` →
+  `<part>_hal_delay_ms`, and so on across I²C/SPI/UART/CAN, in the portable
+  header/core, both native seams, and the `fill_in_brief` prose. Two of the
+  three field tests hit the same link-time collision (`multiple definition of
+  'hal_delay_ms'`) the moment a second Driverge driver joined the firmware
+  image; a per-driver prefix is the durable fix the CAP1206 session applied by
+  hand. A new multi-driver link gate (two generated drivers compiled and
+  linked together) pins the fix. `validate_driver` accepts the prefixed family
+  and downgrades bare legacy seam names to a warning ("unprefixed seam symbol
+  — collides in multi-driver projects"); unknown names in either family remain
+  errors.
+- **Codegen:** the SPI seam contract is now **full-duplex**:
+  `int <part>_hal_spi_transfer(const uint8_t *tx, uint8_t *rx, uint16_t len)`
+  — one CS-framed transaction clocking `len` bytes both ways, `rx` nullable
+  for write-only. The previous write-phase-then-read-phase shape could not
+  express same-frame-response devices (TUSS4470 returns read data in the very
+  frame that carries the address), forcing a hand-edited seam in the field.
+  Write-then-read parts are served by the standard dummy-padding idiom
+  (documented in the generated seam comment); STM32 renders
+  `HAL_SPI_TransmitReceive`/`HAL_SPI_Transmit`, ESP32 a single full-duplex
+  `spi_transaction_t`.
+
+### Added
+
+- **Codegen:** native targets now also emit a **seam companion header**
+  (`<part>_hal_stm32.h` / `<part>_hal_esp32.h`) declaring the one-time
+  `<part>_<target>_bind(...)` prototype — all three field sessions had to
+  hand-write it to call `bind` from `main.c` without an implicit declaration.
+  The seam source includes it; with `language: "cpp"` the companion header
+  stays `.h` (its `extern "C"` guard makes it valid either way).
+- **PDF Parsing:** new **onsemi register-table extractor** (FXL6408's Table 9
+  dialect: per-bit columns plus a Type column, odd-stepped addresses,
+  indeterminate `XXXXXXXX` reset cells kept verbatim) — the FXL6408 session
+  had extraction `deferred` with 0 registers; the fixture now yields all 10
+  registers (80 bit positions) as `complete`. onsemi is also detected as a
+  manufacturer (copyright/domain signals) and `FXL`/`CAP1`/`TUSS` part-number
+  families are recognized.
+- **PDF Parsing:** new **Microchip register-summary extractor** (CAP1206's
+  Table 5-1 dialect: Address/Register/R-W/Default columns with no bit detail,
+  spanning continuation pages) — the CAP1206 session extracted 4 of 55
+  registers; the fixture now yields all 55 with addresses, names, and reset
+  values (`partial`, bit detail deferred to the host AI as designed).
+
+### Fixed
+
+- **Validation:** `validate_driver` had a blind spot for prefixed seam calls —
+  the `\bhal_` scan cannot match `<part>_hal_*` (no word boundary after the
+  underscore), so a driver whose core misspelled a prefixed seam call passed
+  the lint unchecked (this is how the hand-prefixed CAP1206 driver validated
+  in the field). The lint now scans the part's own `<part>_hal_*` family
+  against the per-bus allow-list.
+- **PDF Parsing:** TI register-map extraction now recognizes the
+  `Address`-header + `0x..`-address dialect (TUSS4470's Table 7-5; previously
+  only `Offset` + `..h` parsed), trims description prose glued onto register
+  acronyms (`"DEV_STAT Fault status bits"` → `DEV_STAT`), and TI field tables
+  accept **colon bit ranges** (`5:0`) alongside hyphens (`14-12`) — the
+  hyphen-only regex silently dropped every multi-bit TUSS4470 field while
+  keeping single-bit ones, which would have produced a misleadingly "complete"
+  extraction.
+
+### Docs
+
+- **Schema:** `register.reset` now documents that non-hex verbatim cells
+  (e.g. `"XXXXXXXX"`) are valid — the FXL6408 session invented a `0x00`
+  placeholder under the mistaken belief the schema required concrete hex.
+- **README:** the thin-HAL seam table shows the prefixed names, the
+  full-duplex SPI signature, and the seam companion headers.
+
 ## [0.1.0-beta.2] - 2026-07-10
 
 Closed-beta iteration, published to npm under the `beta` dist-tag
